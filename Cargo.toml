@@ -8,8 +8,10 @@ version = "133.1.0"
 edition = "2024"
 rust-version = "1.99"
 authors = ["Sergey Pepyakin <s.pepyakin@gmail.com>", "The binaryen-sys contributors"]
-# The crate's code and Binaryen's, then the vendored LLVM (DWARF support) and FP16.
-license = "Apache-2.0 AND Apache-2.0 WITH LLVM-exception AND MIT"
+# The crate's code and Binaryen's, then what the vendored LLVM (DWARF support) carries (its own
+# licence, the NCSA licence of its system interface code, Unicode's for ConvertUTF.cpp), then
+# FP16's (README.md, "Origin and licence").
+license = "Apache-2.0 AND Apache-2.0 WITH LLVM-exception AND NCSA AND Unicode-DFS-2015 AND MIT"
 repository = "https://github.com/play-horizon/binaryen-sys"
 description = "Raw bindings to the C API of Binaryen, the WebAssembly compiler and optimizer library"
 categories = ["external-ffi-bindings"]

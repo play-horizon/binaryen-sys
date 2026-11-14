@@ -51,8 +51,8 @@ reads, byte for byte as Binaryen's repository has it at the release's tag, and n
   (binaryen.js);
 - `third_party/CMakeLists.txt`, `third_party/FP16/` (half-precision float headers) and
   `third_party/llvm-project/` (the part of LLVM that reads and writes DWARF);
-- `LICENSE`, Binaryen's licence (Apache 2.0); FP16's (MIT) and LLVM's (Apache 2.0 with LLVM
-  exceptions) are inside their directories.
+- `LICENSE`, Binaryen's licence (Apache 2.0); FP16's and LLVM's licences and notices are inside
+  their directories ([Origin and licence](#origin-and-licence)).
 
 Left out are the tests, the fuzzers, the tools, binaryen.js, the documentation, and Binaryen's own
 submodules (googletest, fuzztest, mimalloc, the spec test suite), which only its tests, fuzzers
@@ -177,8 +177,19 @@ ABI, and dropped the C++ shim (fuzzing and reading helpers that aren't part of t
 generated list of passes.
 
 The crate's own code is licensed under the Apache License 2.0 ([LICENSE](LICENSE)), like
-Binaryen itself ([binaryen/LICENSE](binaryen/LICENSE)). The vendored sources keep their licences:
-Binaryen's, Apache 2.0; FP16's, MIT ([binaryen/third_party/FP16/LICENSE](binaryen/third_party/FP16/LICENSE));
-LLVM's, Apache 2.0 with LLVM exceptions
-([binaryen/third_party/llvm-project/include/llvm/LICENSE.TXT](binaryen/third_party/llvm-project/include/llvm/LICENSE.TXT)).
-The library the crate links in is made of all three, which `Cargo.toml`'s `license` states.
+Binaryen itself ([binaryen/LICENSE](binaryen/LICENSE)). The vendored sources keep their licences
+and notices, as upstream has them:
+
+- Binaryen: Apache 2.0.
+- FP16: MIT ([binaryen/third_party/FP16/LICENSE](binaryen/third_party/FP16/LICENSE)).
+- LLVM's DWARF support (`binaryen/third_party/llvm-project/`): Apache 2.0 with LLVM exceptions,
+  the project's licence, which also gives the legacy University of Illinois/NCSA licence its older
+  code came under ([include/llvm/LICENSE.TXT](binaryen/third_party/llvm-project/include/llvm/LICENSE.TXT));
+  the NCSA licence alone for its system interface code (`Unix/`,
+  [include/llvm/Support/LICENSE.TXT](binaryen/third_party/llvm-project/include/llvm/Support/LICENSE.TXT));
+  Unicode's licence for `ConvertUTF.cpp` (in the file); and `MD5.cpp` is in the public domain,
+  with a permissive grant where that doesn't hold (in the file).
+
+The library the crate links in is made of all of them, which `Cargo.toml`'s `license` states as
+`Apache-2.0 AND Apache-2.0 WITH LLVM-exception AND NCSA AND Unicode-DFS-2015 AND MIT` (SPDX has no
+identifier for `MD5.cpp`'s notice, which asks nothing of the user).
