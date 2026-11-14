@@ -1,7 +1,7 @@
 # Moves the crate to each new Binaryen release: every day (and
 # when run by hand), it looks for a release tag newer than the one the `binaryen` submodule pins.
 # When there is one, `prepare` runs scripts/update-binaryen.sh and hands on the release's tag and
-# the patch of the regenerated bindings; `push` writes the update from them (the submodule at the
+# the regenerated bindings; `push` writes the update from them (the submodule at the
 # release, the bindings, the version `<N>.0.0`) and pushes it as a commit to the branch
 # `update-binaryen`, never over a person's commits there; `test` runs CI on that commit, on the
 # three OSes; and `release` fast-forwards main to it, tags it `v<N>.0.0` and deletes the branch.
@@ -20,6 +20,11 @@ permissions:
 concurrency:
   group: update-binaryen
   cancel-in-progress: false
+
+# bash with `-eo pipefail`: a failing command fails its step, in a pipe too.
+defaults:
+  run:
+    shell: bash
 
 jobs:
   # Builds and runs third-party code (bindgen-cli and its dependencies), so it can't write: its
@@ -41,21 +46,22 @@ jobs:
 
       - run: scripts/update-binaryen.sh
 
-      # The bindings' patch is compressed and base64-encoded, to fit in an output.
+      # The whole bindings file, compressed and base64-encoded to fit in an output: `push`
+      # writes it to its one path, so nothing `prepare` hands on can touch another file.
       - id: result
         run: |
           if git diff --quiet; then
             echo "Binaryen is up to date."
             exit 0
           fi
-          echo "tag=$(git -C binaryen describe --tags --exact-match)" >> "$GITHUB_OUTPUT"
-          if ! git diff --quiet -- src/bindings.rs; then
-            echo "bindings=$(git diff -- src/bindings.rs | gzip --best | base64 --wrap=0)" >> "$GITHUB_OUTPUT"
-          fi
+          tag="$(git -C binaryen describe --tags --exact-match)"
+          bindings="$(gzip --best < src/bindings.rs | base64 --wrap=0)"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "bindings=$bindings" >> "$GITHUB_OUTPUT"
 
   # Writes the update from `prepare`'s outputs alone, with git and the toolchain's cargo: the
   # tag checked to name a newer release, the submodule set to the commit Binaryen's repository
-  # tags with it, the patch applied to src/bindings.rs and nothing else. A branch
+  # tags with it, the bindings written to src/bindings.rs, the version. A branch
   # `update-binaryen` holding a person's commits (a fix of a release that broke the update,
   # README.md) is never overwritten: the run fails, and the person finishes the update. One
   # holding only this workflow's commits (a run whose tests failed) is replaced, with a lease, so
@@ -89,6 +95,10 @@ jobs:
           fi
           release="${BASH_REMATCH[1]}"
           current="$(sed --quiet 's/^version = "\([0-9]*\)\..*"$/\1/p' Cargo.toml | head --lines=1)"
+          if [[ -z "$current" || -z "$BINDINGS" ]]; then
+            echo "::error::no crate version in Cargo.toml, or no bindings from prepare"
+            exit 1
+          fi
           if (( release <= current )); then
             echo "::error::$TAG isn't newer than the crate's Binaryen $current"
             exit 1
@@ -101,13 +111,11 @@ jobs:
             exit 1
           fi
           git update-index --cacheinfo "160000,$binaryen,binaryen"
-          if [[ -n "$BINDINGS" ]]; then
-            base64 --decode <<< "$BINDINGS" | gunzip | git apply --index --include=src/bindings.rs
-          fi
+          base64 --decode <<< "$BINDINGS" | gunzip > src/bindings.rs
           version="$release.0.0"
           sed --in-place "0,/^version = .*/s//version = \"$version\"/" Cargo.toml
           cargo update --workspace --quiet
-          git add Cargo.toml Cargo.lock
+          git add src/bindings.rs Cargo.toml Cargo.lock
 
           bot='41898282+github-actions[bot]@users.noreply.github.com'
           remote="https://github.com/$GITHUB_REPOSITORY.git"

@@ -57,13 +57,13 @@ with `gh workflow run update.yml`:
 1. **prepare** runs `scripts/update-binaryen.sh`, which finds the latest `version_<N>` tag of
    `WebAssembly/binaryen`. If the crate is already on it, the run ends there. Otherwise the script
    points the `binaryen` submodule at the tag, regenerates `src/bindings.rs`, and sets the
-   version to `<N>.0.0` in `Cargo.toml` and `Cargo.lock`; the job hands on the tag and the patch
-   of `src/bindings.rs`. It can't write to the repository: it builds and runs third-party code
+   version to `<N>.0.0` in `Cargo.toml` and `Cargo.lock`; the job hands on the tag and the new
+   `src/bindings.rs`. It can't write to the repository: it builds and runs third-party code
    (bindgen-cli and its dependencies).
 2. **push** writes the same update from those two alone, with git and the toolchain's cargo
    (no third-party code): it checks the tag names a newer release, points the submodule at the
-   commit `WebAssembly/binaryen` tags with it, applies the patch to `src/bindings.rs` and to no
-   other file, and sets the version. It commits that as `BUILD: Binaryen version_<N>` and pushes
+   commit `WebAssembly/binaryen` tags with it, writes the bindings to `src/bindings.rs` (the one
+   file it takes from **prepare**), and sets the version. It commits that as `BUILD: Binaryen version_<N>` and pushes
    it to the branch `update-binaryen`, replacing what an earlier run left there, but never a
    person's commits: when the branch holds any (authored or committed by someone else than the
    workflow), the run fails instead.
