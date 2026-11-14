@@ -44,9 +44,9 @@ C library's.
 `binaryen/` holds the part of a Binaryen release that the build script's static library build
 reads, byte for byte as Binaryen's repository has it at the release's tag, and nothing else:
 
-- the top `CMakeLists.txt`, `config.h.in`, and the three files that `CMakeLists.txt` configures
-  whatever its options (`scripts/binaryen-lit.in`, `test/lit/CMakeLists.txt`,
-  `test/lit/lit.site.cfg.py.in`);
+- the top `CMakeLists.txt`, `config.h.in`, and the three files that `CMakeLists.txt` reads
+  whatever its options: `scripts/binaryen-lit.in`, which it configures, and `test/lit/`'s
+  `CMakeLists.txt`, which it adds, with the `lit.site.cfg.py.in` that one configures;
 - `src/`, the library's sources, without `src/tools/` (the command-line tools) and `src/js/`
   (binaryen.js);
 - `third_party/CMakeLists.txt`, `third_party/FP16/` (half-precision float headers) and
@@ -139,7 +139,8 @@ Moving a project that depends on the crate to the new release is a change of tag
 
 ## By hand
 
-The scripts are bash and need, besides Cargo, `git` and network access:
+The scripts are bash and need, besides Cargo, `git`, network access and GNU coreutils, find and
+sed (as on Linux):
 
 - `scripts/vendor-binaryen.sh version_<N>` replaces `binaryen/` with that release's sources and
   records it in `binaryen-release`; `scripts/vendor-binaryen.sh --check` checks the vendored tree
