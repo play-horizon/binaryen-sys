@@ -2,9 +2,9 @@
 # when run by hand), it looks for a release tag newer than the one the `binaryen` submodule pins.
 # When there is one, `prepare` runs scripts/update-binaryen.sh (the submodule moved to the tag,
 # the bindings regenerated, the version set to `<N>.0.0`) and pushes the result as a commit to the
-# branch `update-binaryen`; `test` runs CI on that commit, on the three OSes; and `release`
-# fast-forwards main to it, tags it `v<N>.0.0` and deletes the branch. A failure anywhere leaves
-# main as it was.
+# branch `update-binaryen` (never over a person's commits there); `test` runs CI on that commit,
+# on the three OSes; and `release` fast-forwards main to it, tags it `v<N>.0.0` and deletes the
+# branch. A failure anywhere leaves main as it was.
 name: Update Binaryen
 
 on:
@@ -38,18 +38,36 @@ jobs:
 
       - run: scripts/update-binaryen.sh
 
+      # A branch `update-binaryen` holding commits of a person (a fix of a release that broke
+      # the update, README.md) is never overwritten: the run fails, and the person finishes the
+      # update. One holding only this workflow's commits (a run whose tests failed) is replaced,
+      # with a lease, so a commit pushed meanwhile isn't lost either.
       - id: commit
         run: |
           if git diff --quiet; then
             echo "Binaryen is up to date."
             exit 0
           fi
+          bot='41898282+github-actions[bot]@users.noreply.github.com'
+          remote="https://github.com/$GITHUB_REPOSITORY.git"
+          base="$(git rev-parse HEAD)"
+          lease="$(git ls-remote "$remote" refs/heads/update-binaryen | cut --fields=1)"
+          if [[ -n "$lease" ]]; then
+            git fetch --quiet "$remote" refs/heads/update-binaryen
+            while read -r author; do
+              if [[ "$author" != "$bot" ]]; then
+                echo "::error::update-binaryen holds a person's commits: finish that update by hand (README.md)."
+                exit 1
+              fi
+            done < <(git log --format=%ae "$base..FETCH_HEAD")
+          fi
           tag="$(git -C binaryen describe --tags --exact-match)"
           version="$(sed --quiet 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head --lines=1)"
           git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git config user.email "$bot"
           git commit --quiet --all --message "BUILD: Binaryen $tag"
-          git push --force origin HEAD:refs/heads/update-binaryen
+          git push --force-with-lease="refs/heads/update-binaryen:$lease" origin \
+            HEAD:refs/heads/update-binaryen
           echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
