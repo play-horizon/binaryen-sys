@@ -114,12 +114,12 @@ jobs:
           lease="$(git ls-remote "$remote" refs/heads/update-binaryen | cut --fields=1)"
           if [[ -n "$lease" ]]; then
             git fetch --quiet "$remote" refs/heads/update-binaryen
-            while read -r author; do
-              if [[ "$author" != "$bot" ]]; then
+            while read -r author committer; do
+              if [[ "$author" != "$bot" || "$committer" != "$bot" ]]; then
                 echo "::error::update-binaryen holds a person's commits: finish that update by hand (README.md)."
                 exit 1
               fi
-            done < <(git log --format=%ae "HEAD..FETCH_HEAD")
+            done < <(git log --format='%ae %ce' "HEAD..FETCH_HEAD")
           fi
 
           git config user.name 'github-actions[bot]'
