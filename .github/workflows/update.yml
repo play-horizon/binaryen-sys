@@ -6,7 +6,9 @@
 # the branch `update-binaryen`, never over a person's commits there; `test` runs CI on that
 # commit, on the three OSes; and `release` fast-forwards main to it, tags it `v<N>.0.0` and
 # deletes the branch. A failure anywhere leaves main as it was. Only the steps that push hold a
-# token that may write, and their jobs run no third-party code.
+# token that may write, and their jobs run no third-party code. On every run, `keepalive`
+# re-enables this workflow through the API, so that GitHub doesn't pause its schedule for
+# inactivity (README.md).
 name: Update Binaryen
 
 on:
@@ -27,6 +29,19 @@ defaults:
     shell: bash
 
 jobs:
+  # Re-enables this workflow, which it is already, through the REST API: GitHub disables a public
+  # repository's scheduled workflows after 60 days without activity in the repository, and this
+  # keeps the schedule going without a commit. Its token may only manage Actions.
+  keepalive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method PUT "repos/$GITHUB_REPOSITORY/actions/workflows/update.yml/enable"
+
   # Builds and runs third-party code (bindgen-cli and its dependencies), so it can't write: its
   # result goes to `push` as outputs.
   prepare:

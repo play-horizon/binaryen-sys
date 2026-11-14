@@ -115,9 +115,25 @@ branch alone and its runs fail, which shows the update is in a person's hands), 
 (run on a pull request from the branch), push it to `main` with the version and the tag the
 workflow would have given it, and delete the branch.
 
-GitHub disables the scheduled workflows of a public repository after 60 days without activity in
-it, and Binaryen releases come about every month or two, so a quiet stretch can pause the
-updates: re-enable the workflow from the Actions tab (or with `gh workflow enable update.yml`).
+### Keeping the schedule alive
+
+GitHub disables the scheduled workflows of a public repository "when no repository activity has
+occurred in 60 days"
+([Events that trigger workflows](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule)),
+and Binaryen releases come about every month or two, so a quiet stretch would pause the updates.
+The workflow makes no commit to prevent it: on every run, scheduled or by hand, its **keepalive**
+job re-enables the workflow through the REST API
+([Enable a workflow](https://docs.github.com/en/rest/actions/workflows#enable-a-workflow),
+`PUT /repos/{owner}/{repo}/actions/workflows/update.yml/enable`), with a token that may only
+manage Actions (`actions: write`, nothing else). It runs beside the update, so a failed update
+doesn't stop it.
+
+GitHub's documentation says what the endpoint does (it sets the workflow's state to `active`) but
+not which activity resets the 60 days; that re-enabling does is what the projects that keep their
+schedules this way report, not something GitHub documents. If the schedule is paused anyway (the
+Actions tab says so, and `gh workflow list --all` shows the state `disabled_inactivity`), a
+disabled workflow can't run its keepalive: re-enable it from the Actions tab, or with
+`gh workflow enable update.yml`, and run it once (`gh workflow run update.yml`) to catch up.
 
 Moving a project that depends on the crate to the new release is a change of tag in that project.
 
