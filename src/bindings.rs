@@ -144,6 +144,8 @@ unsafe extern "C-unwind" {
     pub fn BinaryenTypeNullref() -> BinaryenType;
     pub fn BinaryenTypeNullExternref() -> BinaryenType;
     pub fn BinaryenTypeNullFuncref() -> BinaryenType;
+    pub fn BinaryenTypeExnref() -> BinaryenType;
+    pub fn BinaryenTypeNullExnref() -> BinaryenType;
     pub fn BinaryenTypeUnreachable() -> BinaryenType;
     pub fn BinaryenTypeAuto() -> BinaryenType;
     pub fn BinaryenTypeCreate(
@@ -172,6 +174,8 @@ unsafe extern "C-unwind" {
     pub fn BinaryenHeapTypeNone() -> BinaryenHeapType;
     pub fn BinaryenHeapTypeNoext() -> BinaryenHeapType;
     pub fn BinaryenHeapTypeNofunc() -> BinaryenHeapType;
+    pub fn BinaryenHeapTypeExn() -> BinaryenHeapType;
+    pub fn BinaryenHeapTypeNoexn() -> BinaryenHeapType;
     pub fn BinaryenHeapTypeIsBasic(heapType: BinaryenHeapType) -> bool;
     pub fn BinaryenHeapTypeIsSignature(heapType: BinaryenHeapType) -> bool;
     pub fn BinaryenHeapTypeIsStruct(heapType: BinaryenHeapType) -> bool;
@@ -309,6 +313,7 @@ unsafe extern "C-unwind" {
     pub fn BinaryenWideIntMulId() -> BinaryenExpressionId;
     pub fn BinaryenWaitqueueNewId() -> BinaryenExpressionId;
     pub fn BinaryenWaitqueueNotifyId() -> BinaryenExpressionId;
+    pub fn BinaryenPublishId() -> BinaryenExpressionId;
     pub fn BinaryenExternalFunction() -> BinaryenExternalKind;
     pub fn BinaryenExternalTable() -> BinaryenExternalKind;
     pub fn BinaryenExternalMemory() -> BinaryenExternalKind;
@@ -1128,6 +1133,14 @@ unsafe extern "C-unwind" {
         numCatchBodies: BinaryenIndex,
         delegateTarget: *const ::core::ffi::c_char,
     ) -> BinaryenExpressionRef;
+    pub fn BinaryenTryTable(
+        module: BinaryenModuleRef,
+        body: BinaryenExpressionRef,
+        catchTags: *mut *const ::core::ffi::c_char,
+        catchDests: *mut *const ::core::ffi::c_char,
+        catchRefs: *const bool,
+        numCatches: BinaryenIndex,
+    ) -> BinaryenExpressionRef;
     pub fn BinaryenThrow(
         module: BinaryenModuleRef,
         tag: *const ::core::ffi::c_char,
@@ -1137,6 +1150,10 @@ unsafe extern "C-unwind" {
     pub fn BinaryenRethrow(
         module: BinaryenModuleRef,
         target: *const ::core::ffi::c_char,
+    ) -> BinaryenExpressionRef;
+    pub fn BinaryenThrowRef(
+        module: BinaryenModuleRef,
+        exnref: BinaryenExpressionRef,
     ) -> BinaryenExpressionRef;
     pub fn BinaryenTupleMake(
         module: BinaryenModuleRef,
@@ -1207,6 +1224,24 @@ unsafe extern "C-unwind" {
         index: BinaryenIndex,
         ref_: BinaryenExpressionRef,
         value: BinaryenExpressionRef,
+    ) -> BinaryenExpressionRef;
+    pub fn BinaryenStructWait(
+        module: BinaryenModuleRef,
+        ref_: BinaryenExpressionRef,
+        index: BinaryenIndex,
+        expected: BinaryenExpressionRef,
+        timeout: BinaryenExpressionRef,
+        waitqueue: BinaryenExpressionRef,
+    ) -> BinaryenExpressionRef;
+    pub fn BinaryenWaitqueueNew(module: BinaryenModuleRef) -> BinaryenExpressionRef;
+    pub fn BinaryenWaitqueueNotify(
+        module: BinaryenModuleRef,
+        waitqueue: BinaryenExpressionRef,
+        count: BinaryenExpressionRef,
+    ) -> BinaryenExpressionRef;
+    pub fn BinaryenPublish(
+        module: BinaryenModuleRef,
+        ref_: BinaryenExpressionRef,
     ) -> BinaryenExpressionRef;
     pub fn BinaryenArrayNew(
         module: BinaryenModuleRef,
@@ -1871,6 +1906,59 @@ unsafe extern "C-unwind" {
         delegateTarget: *const ::core::ffi::c_char,
     );
     pub fn BinaryenTryIsDelegate(expr: BinaryenExpressionRef) -> bool;
+    pub fn BinaryenTryTableGetBody(expr: BinaryenExpressionRef) -> BinaryenExpressionRef;
+    pub fn BinaryenTryTableSetBody(expr: BinaryenExpressionRef, bodyExpr: BinaryenExpressionRef);
+    pub fn BinaryenTryTableGetNumCatches(expr: BinaryenExpressionRef) -> BinaryenIndex;
+    pub fn BinaryenTryTableGetCatchTagAt(
+        expr: BinaryenExpressionRef,
+        index: BinaryenIndex,
+    ) -> *const ::core::ffi::c_char;
+    pub fn BinaryenTryTableSetCatchTagAt(
+        expr: BinaryenExpressionRef,
+        index: BinaryenIndex,
+        catchTag: *const ::core::ffi::c_char,
+        sentType: BinaryenType,
+    );
+    pub fn BinaryenTryTableGetCatchDestAt(
+        expr: BinaryenExpressionRef,
+        index: BinaryenIndex,
+    ) -> *const ::core::ffi::c_char;
+    pub fn BinaryenTryTableSetCatchDestAt(
+        expr: BinaryenExpressionRef,
+        index: BinaryenIndex,
+        catchDest: *const ::core::ffi::c_char,
+    );
+    pub fn BinaryenTryTableIsCatchRefAt(expr: BinaryenExpressionRef, index: BinaryenIndex) -> bool;
+    pub fn BinaryenTryTableSetCatchRefAt(
+        expr: BinaryenExpressionRef,
+        index: BinaryenIndex,
+        catchRef: bool,
+        sentType: BinaryenType,
+    );
+    pub fn BinaryenTryTableGetSentTypeAt(
+        expr: BinaryenExpressionRef,
+        index: BinaryenIndex,
+    ) -> BinaryenType;
+    pub fn BinaryenTryTableAppendCatch(
+        expr: BinaryenExpressionRef,
+        catchTag: *const ::core::ffi::c_char,
+        catchDest: *const ::core::ffi::c_char,
+        catchRef: bool,
+        sentType: BinaryenType,
+    ) -> BinaryenIndex;
+    pub fn BinaryenTryTableInsertCatchAt(
+        expr: BinaryenExpressionRef,
+        index: BinaryenIndex,
+        catchTag: *const ::core::ffi::c_char,
+        catchDest: *const ::core::ffi::c_char,
+        catchRef: bool,
+        sentType: BinaryenType,
+    );
+    pub fn BinaryenTryTableRemoveCatchAt(
+        expr: BinaryenExpressionRef,
+        index: BinaryenIndex,
+    ) -> *const ::core::ffi::c_char;
+    pub fn BinaryenTryTableHasCatchAll(expr: BinaryenExpressionRef) -> bool;
     pub fn BinaryenThrowGetTag(expr: BinaryenExpressionRef) -> *const ::core::ffi::c_char;
     pub fn BinaryenThrowSetTag(expr: BinaryenExpressionRef, tagName: *const ::core::ffi::c_char);
     pub fn BinaryenThrowGetNumOperands(expr: BinaryenExpressionRef) -> BinaryenIndex;
@@ -1900,6 +1988,11 @@ unsafe extern "C-unwind" {
     pub fn BinaryenRethrowSetTarget(
         expr: BinaryenExpressionRef,
         target: *const ::core::ffi::c_char,
+    );
+    pub fn BinaryenThrowRefGetExnref(expr: BinaryenExpressionRef) -> BinaryenExpressionRef;
+    pub fn BinaryenThrowRefSetExnref(
+        expr: BinaryenExpressionRef,
+        exnrefExpr: BinaryenExpressionRef,
     );
     pub fn BinaryenTupleMakeGetNumOperands(expr: BinaryenExpressionRef) -> BinaryenIndex;
     pub fn BinaryenTupleMakeGetOperandAt(
@@ -2013,6 +2106,39 @@ unsafe extern "C-unwind" {
     pub fn BinaryenStructSetSetRef(expr: BinaryenExpressionRef, refExpr: BinaryenExpressionRef);
     pub fn BinaryenStructSetGetValue(expr: BinaryenExpressionRef) -> BinaryenExpressionRef;
     pub fn BinaryenStructSetSetValue(expr: BinaryenExpressionRef, valueExpr: BinaryenExpressionRef);
+    pub fn BinaryenStructWaitGetRef(expr: BinaryenExpressionRef) -> BinaryenExpressionRef;
+    pub fn BinaryenStructWaitSetRef(expr: BinaryenExpressionRef, refExpr: BinaryenExpressionRef);
+    pub fn BinaryenStructWaitGetIndex(expr: BinaryenExpressionRef) -> BinaryenIndex;
+    pub fn BinaryenStructWaitSetIndex(expr: BinaryenExpressionRef, index: BinaryenIndex);
+    pub fn BinaryenStructWaitGetExpected(expr: BinaryenExpressionRef) -> BinaryenExpressionRef;
+    pub fn BinaryenStructWaitSetExpected(
+        expr: BinaryenExpressionRef,
+        expectedExpr: BinaryenExpressionRef,
+    );
+    pub fn BinaryenStructWaitGetTimeout(expr: BinaryenExpressionRef) -> BinaryenExpressionRef;
+    pub fn BinaryenStructWaitSetTimeout(
+        expr: BinaryenExpressionRef,
+        timeoutExpr: BinaryenExpressionRef,
+    );
+    pub fn BinaryenStructWaitGetWaitqueue(expr: BinaryenExpressionRef) -> BinaryenExpressionRef;
+    pub fn BinaryenStructWaitSetWaitqueue(
+        expr: BinaryenExpressionRef,
+        waitqueueExpr: BinaryenExpressionRef,
+    );
+    pub fn BinaryenWaitqueueNotifyGetWaitqueue(
+        expr: BinaryenExpressionRef,
+    ) -> BinaryenExpressionRef;
+    pub fn BinaryenWaitqueueNotifySetWaitqueue(
+        expr: BinaryenExpressionRef,
+        waitqueueExpr: BinaryenExpressionRef,
+    );
+    pub fn BinaryenWaitqueueNotifyGetCount(expr: BinaryenExpressionRef) -> BinaryenExpressionRef;
+    pub fn BinaryenWaitqueueNotifySetCount(
+        expr: BinaryenExpressionRef,
+        countExpr: BinaryenExpressionRef,
+    );
+    pub fn BinaryenPublishGetRef(expr: BinaryenExpressionRef) -> BinaryenExpressionRef;
+    pub fn BinaryenPublishSetRef(expr: BinaryenExpressionRef, refExpr: BinaryenExpressionRef);
     pub fn BinaryenArrayNewGetInit(expr: BinaryenExpressionRef) -> BinaryenExpressionRef;
     pub fn BinaryenArrayNewSetInit(expr: BinaryenExpressionRef, initExpr: BinaryenExpressionRef);
     pub fn BinaryenArrayNewGetSize(expr: BinaryenExpressionRef) -> BinaryenExpressionRef;
@@ -2695,6 +2821,7 @@ unsafe extern "C-unwind" {
     pub fn BinaryenSideEffectIsAtomic() -> BinaryenSideEffects;
     pub fn BinaryenSideEffectThrows() -> BinaryenSideEffects;
     pub fn BinaryenSideEffectDanglingPop() -> BinaryenSideEffects;
+    pub fn BinaryenSideEffectSuspends() -> BinaryenSideEffects;
     pub fn BinaryenSideEffectAny() -> BinaryenSideEffects;
     pub fn BinaryenExpressionGetSideEffects(
         expr: BinaryenExpressionRef,
