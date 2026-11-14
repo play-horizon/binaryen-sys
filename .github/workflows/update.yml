@@ -4,7 +4,8 @@
 # the bindings regenerated, the version set to `<N>.0.0`) and pushes the result as a commit to the
 # branch `update-binaryen` (never over a person's commits there); `test` runs CI on that commit,
 # on the three OSes; and `release` fast-forwards main to it, tags it `v<N>.0.0` and deletes the
-# branch. A failure anywhere leaves main as it was.
+# branch. A failure anywhere leaves main as it was. The token that may write is given only to the
+# steps that push.
 name: Update Binaryen
 
 on:
@@ -29,10 +30,13 @@ jobs:
       commit: ${{ steps.commit.outputs.commit }}
       version: ${{ steps.commit.outputs.version }}
     steps:
+      # No credentials on disk: the steps before the push build and run third-party code
+      # (bindgen-cli and its dependencies). The push step gets the token for itself.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: main
           submodules: true
+          persist-credentials: false
 
       - run: cargo install bindgen-cli --version 0.73.2 --locked
 
@@ -43,6 +47,8 @@ jobs:
       # update. One holding only this workflow's commits (a run whose tests failed) is replaced,
       # with a lease, so a commit pushed meanwhile isn't lost either.
       - id: commit
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           if git diff --quiet; then
             echo "Binaryen is up to date."
@@ -66,7 +72,8 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email "$bot"
           git commit --quiet --all --message "BUILD: Binaryen $tag"
-          git push --force-with-lease="refs/heads/update-binaryen:$lease" origin \
+          git push --force-with-lease="refs/heads/update-binaryen:$lease" \
+            "https://x-access-token:$GITHUB_TOKEN@github.com/$GITHUB_REPOSITORY.git" \
             HEAD:refs/heads/update-binaryen
           echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
@@ -89,13 +96,16 @@ jobs:
         with:
           ref: ${{ needs.prepare.outputs.commit }}
           fetch-depth: 0
+          persist-credentials: false
 
       # A plain push only fast-forwards, and `--atomic` pushes main and the tag together or not
       # at all: if main moved since `prepare`, nothing changes.
       - env:
           COMMIT: ${{ needs.prepare.outputs.commit }}
           TAG: v${{ needs.prepare.outputs.version }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
+          remote="https://x-access-token:$GITHUB_TOKEN@github.com/$GITHUB_REPOSITORY.git"
           git tag "$TAG" "$COMMIT"
-          git push --atomic origin "$COMMIT:refs/heads/main" "refs/tags/$TAG"
-          git push origin --delete update-binaryen
+          git push --atomic "$remote" "$COMMIT:refs/heads/main" "refs/tags/$TAG"
+          git push "$remote" --delete update-binaryen
