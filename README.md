@@ -7,12 +7,12 @@ links it in.
 
 ## Using it
 
-Depend on a tag of this repository, the latest one for the latest Binaryen release (see
-[Versions](#versions)):
+Depend on a tag of this repository, the latest one (the repository's Tags page) for the latest
+Binaryen release ([Versions](#versions)), here `v133.0.1`:
 
 ```toml
 [dependencies]
-binaryen-sys = { git = "https://github.com/play-horizon/binaryen-sys.git", tag = "v133.0.0" }
+binaryen-sys = { git = "https://github.com/play-horizon/binaryen-sys.git", tag = "v133.0.1" }
 ```
 
 Building needs CMake 3.16.3 or later and a C++20 compiler: GCC or Clang on Linux, the Xcode
@@ -58,7 +58,9 @@ with `gh workflow run update.yml`:
    `WebAssembly/binaryen`. If the crate is already on it, the run ends there. Otherwise the script
    points the `binaryen` submodule at the tag, regenerates `src/bindings.rs`, and sets the
    version to `<N>.0.0` in `Cargo.toml` and `Cargo.lock`; the job commits that as
-   `BUILD: Binaryen version_<N>` and pushes it to the branch `update-binaryen`.
+   `BUILD: Binaryen version_<N>` and pushes it to the branch `update-binaryen`, replacing what
+   an earlier run left there, but never a person's commits: when the branch holds any, the run
+   fails instead.
 2. **test** runs the CI workflow on that commit: the build and the tests on Linux, Windows and
    macOS, and the checks on Linux.
 3. **release** fast-forwards `main` to the commit and tags it `v<N>.0.0`, in one atomic push,
@@ -66,8 +68,18 @@ with `gh workflow run update.yml`:
 
 If any step fails, `main` and the tags stay as they were, and the next run tries again. A release
 that changes the C API in a way the bindings can't express, or that breaks the build, needs a
-person: make the fix in a commit on `update-binaryen` (or redo the update by hand, below), check
-it, and push it to `main` with the version and the tag the workflow would have given it.
+person: push the fix as a commit on `update-binaryen` (from then on the workflow leaves the
+branch alone and its runs fail, which shows the update is in a person's hands), check it with CI
+(run on a pull request from the branch), push it to `main` with the version and the tag the
+workflow would have given it, and delete the branch.
+
+The token the workflow pushes with is given only to the steps that push: the steps that build
+third-party code (bindgen-cli and its dependencies, Binaryen) run with no credential on disk.
+
+GitHub disables a scheduled workflow of a public repository after 60 days without activity in
+it, and says so by email to the repository's admins; Binaryen releases come about every month or
+two, so a quiet stretch can do it. Re-enable it from the Actions tab (or with
+`gh workflow enable update.yml`).
 
 Moving a project that depends on the crate to the new release is a change of tag in that project.
 
