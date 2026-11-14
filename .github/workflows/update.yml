@@ -1,11 +1,12 @@
 # Moves the crate to each new Binaryen release: every day (and
 # when run by hand), it looks for a release tag newer than the one the `binaryen` submodule pins.
-# When there is one, `prepare` runs scripts/update-binaryen.sh (the submodule moved to the tag,
-# the bindings regenerated, the version set to `<N>.0.0`) and pushes the result as a commit to the
-# branch `update-binaryen` (never over a person's commits there); `test` runs CI on that commit,
-# on the three OSes; and `release` fast-forwards main to it, tags it `v<N>.0.0` and deletes the
-# branch. A failure anywhere leaves main as it was. The token that may write is given only to the
-# steps that push.
+# When there is one, `prepare` runs scripts/update-binaryen.sh and hands on the release's tag and
+# the patch of the regenerated bindings; `push` writes the update from them (the submodule at the
+# release, the bindings, the version `<N>.0.0`) and pushes it as a commit to the branch
+# `update-binaryen`, never over a person's commits there; `test` runs CI on that commit, on the
+# three OSes; and `release` fast-forwards main to it, tags it `v<N>.0.0` and deletes the branch.
+# A failure anywhere leaves main as it was. Only the jobs that push hold a token that may write,
+# and they run no third-party code.
 name: Update Binaryen
 
 on:
@@ -21,17 +22,15 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Builds and runs third-party code (bindgen-cli and its dependencies), so it can't write: its
+  # result goes to `push` as outputs.
   prepare:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    permissions:
-      contents: write
     outputs:
-      commit: ${{ steps.commit.outputs.commit }}
-      version: ${{ steps.commit.outputs.version }}
+      tag: ${{ steps.result.outputs.tag }}
+      bindings: ${{ steps.result.outputs.bindings }}
     steps:
-      # No credentials on disk: the steps before the push build and run third-party code
-      # (bindgen-cli and its dependencies). The push step gets the token for itself.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: main
@@ -42,21 +41,76 @@ jobs:
 
       - run: scripts/update-binaryen.sh
 
-      # A branch `update-binaryen` holding commits of a person (a fix of a release that broke
-      # the update, README.md) is never overwritten: the run fails, and the person finishes the
-      # update. One holding only this workflow's commits (a run whose tests failed) is replaced,
-      # with a lease, so a commit pushed meanwhile isn't lost either.
-      - id: commit
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
+      # The bindings' patch is compressed and base64-encoded, to fit in an output.
+      - id: result
         run: |
           if git diff --quiet; then
             echo "Binaryen is up to date."
             exit 0
           fi
+          echo "tag=$(git -C binaryen describe --tags --exact-match)" >> "$GITHUB_OUTPUT"
+          if ! git diff --quiet -- src/bindings.rs; then
+            echo "bindings=$(git diff -- src/bindings.rs | gzip --best | base64 --wrap=0)" >> "$GITHUB_OUTPUT"
+          fi
+
+  # Writes the update from `prepare`'s outputs alone, with git and the toolchain's cargo: the
+  # tag checked to name a newer release, the submodule set to the commit Binaryen's repository
+  # tags with it, the patch applied to src/bindings.rs and nothing else. A branch
+  # `update-binaryen` holding a person's commits (a fix of a release that broke the update,
+  # README.md) is never overwritten: the run fails, and the person finishes the update. One
+  # holding only this workflow's commits (a run whose tests failed) is replaced, with a lease, so
+  # a commit pushed meanwhile isn't lost either.
+  push:
+    needs: prepare
+    if: needs.prepare.outputs.tag != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    outputs:
+      commit: ${{ steps.commit.outputs.commit }}
+      version: ${{ steps.commit.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+
+      - id: commit
+        env:
+          TAG: ${{ needs.prepare.outputs.tag }}
+          BINDINGS: ${{ needs.prepare.outputs.bindings }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          if [[ ! "$TAG" =~ ^version_([0-9]+)$ ]]; then
+            echo "::error::not a Binaryen release tag: $TAG"
+            exit 1
+          fi
+          release="${BASH_REMATCH[1]}"
+          current="$(sed --quiet 's/^version = "\([0-9]*\)\..*"$/\1/p' Cargo.toml | head --lines=1)"
+          if (( release <= current )); then
+            echo "::error::$TAG isn't newer than the crate's Binaryen $current"
+            exit 1
+          fi
+          # The tag's commit: the peeled line of an annotated tag comes last.
+          binaryen="$(git ls-remote https://github.com/WebAssembly/binaryen.git \
+            "refs/tags/$TAG" "refs/tags/$TAG^{}" | tail --lines=1 | cut --fields=1)"
+          if [[ -z "$binaryen" ]]; then
+            echo "::error::WebAssembly/binaryen has no tag $TAG"
+            exit 1
+          fi
+          git update-index --cacheinfo "160000,$binaryen,binaryen"
+          if [[ -n "$BINDINGS" ]]; then
+            base64 --decode <<< "$BINDINGS" | gunzip | git apply --index --include=src/bindings.rs
+          fi
+          version="$release.0.0"
+          sed --in-place "0,/^version = .*/s//version = \"$version\"/" Cargo.toml
+          cargo update --workspace --quiet
+          git add Cargo.toml Cargo.lock
+
           bot='41898282+github-actions[bot]@users.noreply.github.com'
           remote="https://github.com/$GITHUB_REPOSITORY.git"
-          base="$(git rev-parse HEAD)"
           lease="$(git ls-remote "$remote" refs/heads/update-binaryen | cut --fields=1)"
           if [[ -n "$lease" ]]; then
             git fetch --quiet "$remote" refs/heads/update-binaryen
@@ -65,13 +119,12 @@ jobs:
                 echo "::error::update-binaryen holds a person's commits: finish that update by hand (README.md)."
                 exit 1
               fi
-            done < <(git log --format=%ae "$base..FETCH_HEAD")
+            done < <(git log --format=%ae "HEAD..FETCH_HEAD")
           fi
-          tag="$(git -C binaryen describe --tags --exact-match)"
-          version="$(sed --quiet 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head --lines=1)"
+
           git config user.name 'github-actions[bot]'
           git config user.email "$bot"
-          git commit --quiet --all --message "BUILD: Binaryen $tag"
+          git commit --quiet --message "BUILD: Binaryen $TAG"
           git push --force-with-lease="refs/heads/update-binaryen:$lease" \
             "https://x-access-token:$GITHUB_TOKEN@github.com/$GITHUB_REPOSITORY.git" \
             HEAD:refs/heads/update-binaryen
@@ -79,14 +132,13 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
   test:
-    needs: prepare
-    if: needs.prepare.outputs.commit != ''
+    needs: push
     uses: ./.github/workflows/ci.yml
     with:
-      ref: ${{ needs.prepare.outputs.commit }}
+      ref: ${{ needs.push.outputs.commit }}
 
   release:
-    needs: [prepare, test]
+    needs: [push, test]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -94,15 +146,15 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ needs.prepare.outputs.commit }}
+          ref: ${{ needs.push.outputs.commit }}
           fetch-depth: 0
           persist-credentials: false
 
       # A plain push only fast-forwards, and `--atomic` pushes main and the tag together or not
-      # at all: if main moved since `prepare`, nothing changes.
+      # at all: if main moved since `push`, nothing changes.
       - env:
-          COMMIT: ${{ needs.prepare.outputs.commit }}
-          TAG: v${{ needs.prepare.outputs.version }}
+          COMMIT: ${{ needs.push.outputs.commit }}
+          TAG: v${{ needs.push.outputs.version }}
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           remote="https://x-access-token:$GITHUB_TOKEN@github.com/$GITHUB_REPOSITORY.git"
