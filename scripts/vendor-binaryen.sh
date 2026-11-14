@@ -43,17 +43,21 @@ tag_commit() {
 
 # Checks out the subset of `commit`, reached through `tag`, into the new directory `dest`, with no
 # .git: a shallow, blobless clone, whose sparse checkout fetches only the subset's files. git
-# checks every object it fetches against the commit's id.
+# checks every object it fetches against the commit's id. The clone's own configuration turns off
+# every line-ending conversion, whatever the user's git configuration says (Git for Windows sets
+# `core.autocrlf`), so the files are written as upstream's commit holds them.
 fetch_subset() {
 	local tag="$1" commit="$2" dest="$3"
-	git clone --quiet --depth=1 --filter=blob:none --no-checkout --branch="$tag" "$upstream" "$dest"
+	git clone --quiet --depth=1 --filter=blob:none --no-checkout --branch="$tag" \
+		--config core.autocrlf=false --config core.eol=lf --config core.attributesFile=/dev/null \
+		"$upstream" "$dest"
 	if [[ "$(git -C "$dest" rev-parse HEAD)" != "$commit" ]]; then
 		echo "upstream's $tag moved: it isn't $commit any more" >&2
 		exit 1
 	fi
 	git -C "$dest" sparse-checkout set --no-cone "${subset[@]}"
 	git -C "$dest" checkout --quiet
-	rm -rf "$dest/.git"
+	rm --recursive --force "$dest/.git"
 }
 
 # One line per file under `dir`: whether it is executable, then its path.
@@ -62,7 +66,7 @@ file_modes() {
 }
 
 work="$(mktemp --directory)"
-trap 'rm -rf "$work"' EXIT
+trap 'rm --recursive --force "$work"' EXIT
 
 if [[ "${1:-}" == "--check" ]]; then
 	tag="$(sed --quiet 's/^tag //p' binaryen-release)"
@@ -89,7 +93,7 @@ if [[ -z "$commit" ]]; then
 	exit 1
 fi
 fetch_subset "$tag" "$commit" "$work/binaryen"
-rm -rf binaryen
+rm --recursive --force binaryen
 cp --recursive --preserve=mode "$work/binaryen" binaryen
 cat >binaryen-release <<EOF
 # The Binaryen release vendored in binaryen/, written by scripts/vendor-binaryen.sh, which checks
