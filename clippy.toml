@@ -1,0 +1,3 @@
+# Tests may unwrap and expect; everything else follows the error rules of the crate.
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true

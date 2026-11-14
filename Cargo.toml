@@ -1,0 +1,33 @@
+# Raw bindings to the C API of Binaryen, built from the Binaryen release the `binaryen`
+# submodule pins. The major version is that release's number (`version_133` is 133.0.0); the
+# update workflow sets it, and our own fixes bump the minor or patch version (README.md).
+[package]
+name = "binaryen-sys"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.99"
+authors = ["Sergey Pepyakin <s.pepyakin@gmail.com>", "The binaryen-sys contributors"]
+license = "Apache-2.0"
+repository = "https://github.com/play-horizon/binaryen-sys"
+description = "Raw bindings to the C API of Binaryen, the WebAssembly compiler and optimizer library"
+categories = ["external-ffi-bindings"]
+links = "binaryen"
+publish = false
+autotests = false
+
+[build-dependencies]
+cmake = "0.1.58"
+
+[[test]]
+name = "main"
+path = "tests/main.rs"
+
+[lints.rust]
+unsafe_code = "deny"
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+allow_attributes = "deny"
+allow_attributes_without_reason = "deny"
+undocumented_unsafe_blocks = "deny"
