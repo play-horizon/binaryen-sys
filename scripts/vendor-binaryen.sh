@@ -43,14 +43,15 @@ tag_commit() {
 
 # Checks out the subset of `commit`, reached through `tag`, into the new directory `dest`, with no
 # .git: a shallow, blobless clone, whose sparse checkout fetches only the subset's files. git
-# checks every object it fetches against the commit's id. The clone's own configuration turns off
-# every line-ending conversion, whatever the user's git configuration says (Git for Windows sets
-# `core.autocrlf`), so the files are written as upstream's commit holds them.
+# checks every object it fetches against the commit's id. The clone takes no template and runs no
+# hook, and its own configuration turns off every line-ending conversion and attributes file,
+# whatever the user's git configuration files say (Git for Windows sets `core.autocrlf`), so the
+# files are written as upstream's commit holds them.
 fetch_subset() {
 	local tag="$1" commit="$2" dest="$3"
-	git clone --quiet --depth=1 --filter=blob:none --no-checkout --branch="$tag" \
+	git clone --quiet --depth=1 --filter=blob:none --no-checkout --branch="$tag" --template= \
 		--config core.autocrlf=false --config core.eol=lf --config core.attributesFile=/dev/null \
-		"$upstream" "$dest"
+		--config core.hooksPath=/dev/null "$upstream" "$dest"
 	if [[ "$(git -C "$dest" rev-parse HEAD)" != "$commit" ]]; then
 		echo "upstream's $tag moved: it isn't $commit any more" >&2
 		exit 1
