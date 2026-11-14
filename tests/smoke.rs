@@ -3,7 +3,9 @@
 //!
 //! The module has a struct type `$point` with a mutable `i32` field, an array type of `i32`, a
 //! tag `$fail` that carries an `i32`, and an exported function `run` that allocates a `$point`
-//! and an array, throws the point's field with `$fail`, catches it and returns it.
+//! and an array, throws the point's field with `$fail`, catches it with `catch_all_ref`, throws
+//! the caught exception again with `throw_ref`, catches it with `catch $fail` and returns the
+//! value.
 
 #![expect(
     unsafe_code,
@@ -62,7 +64,8 @@ fn a_gc_and_exception_handling_module_validates_and_writes() {
         let printed = CStr::from_ptr(text).to_str().unwrap().to_owned();
         free(text.cast());
         assert!(printed.contains("struct.new"), "{printed}");
-        assert!(printed.contains("(catch $fail"), "{printed}");
+        assert!(printed.contains("try_table"), "{printed}");
+        assert!(printed.contains("throw_ref"), "{printed}");
 
         let written = BinaryenModuleAllocateAndWrite(module, ptr::null());
         assert!(written.sourceMap.is_null());
@@ -127,9 +130,14 @@ unsafe fn gc_types() -> [BinaryenHeapType; 2] {
 /// ```wat
 /// (local.set $p (struct.new $point (i32.const 7)))
 /// (drop (array.new_fixed $numbers 2 (i32.const 1) (i32.const 2)))
-/// (try (result i32)
-///   (do (throw $fail (struct.get $point 0 (local.get $p))))
-///   (catch $fail (pop i32)))
+/// (block $caught (result i32)
+///   (try_table (catch $fail $caught)
+///     (throw_ref
+///       (block $held (result exnref)
+///         (try_table (catch_all_ref $held)
+///           (throw $fail (struct.get $point 0 (local.get $p))))
+///         (unreachable))))
+///   (unreachable))
 /// ```
 ///
 /// # Safety
@@ -143,7 +151,8 @@ unsafe fn run_body(
     fail: *const c_char,
 ) -> BinaryenExpressionRef {
     // SAFETY: every operand array has the length passed with it, every name is a live
-    // NUL-terminated string, and every expression belongs to `module`.
+    // NUL-terminated string or null where the C API allows it, and every expression belongs to
+    // `module`.
     unsafe {
         let mut operands = [BinaryenConst(module, BinaryenLiteralInt32(POINT_FIELD))];
         let new_point = BinaryenStructNew(module, operands.as_mut_ptr(), 1, point);
@@ -165,20 +174,51 @@ unsafe fn run_body(
         );
         let mut thrown = [field];
         let throw = BinaryenThrow(module, fail, thrown.as_mut_ptr(), 1);
-        let mut catch_tags = [fail];
-        let mut catch_bodies = [BinaryenPop(module, BinaryenTypeInt32())];
-        let try_catch = BinaryenTry(
+
+        let held = c"held".as_ptr();
+        let mut catch_all = [ptr::null()];
+        let mut to_held = [held];
+        let with_reference = [true];
+        let hold = BinaryenTryTable(
             module,
-            ptr::null(),
             throw,
-            catch_tags.as_mut_ptr(),
+            catch_all.as_mut_ptr(),
+            to_held.as_mut_ptr(),
+            with_reference.as_ptr(),
             1,
-            catch_bodies.as_mut_ptr(),
+        );
+        let mut held_children = [hold, BinaryenUnreachable(module)];
+        let exception = BinaryenBlock(
+            module,
+            held,
+            held_children.as_mut_ptr(),
+            2,
+            BinaryenTypeExnref(),
+        );
+        let rethrow = BinaryenThrowRef(module, exception);
+
+        let caught = c"caught".as_ptr();
+        let mut catch_fail = [fail];
+        let mut to_caught = [caught];
+        let without_reference = [false];
+        let catch = BinaryenTryTable(
+            module,
+            rethrow,
+            catch_fail.as_mut_ptr(),
+            to_caught.as_mut_ptr(),
+            without_reference.as_ptr(),
             1,
-            ptr::null(),
+        );
+        let mut caught_children = [catch, BinaryenUnreachable(module)];
+        let handler = BinaryenBlock(
+            module,
+            caught,
+            caught_children.as_mut_ptr(),
+            2,
+            BinaryenTypeInt32(),
         );
 
-        let mut children = [set_point, drop_numbers, try_catch];
+        let mut children = [set_point, drop_numbers, handler];
         BinaryenBlock(
             module,
             ptr::null(),

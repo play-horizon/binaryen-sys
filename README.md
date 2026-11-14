@@ -87,8 +87,9 @@ The scripts are bash and need, besides Cargo, `git` and network access:
 
 `cargo test` runs the smoke test (`tests/smoke.rs`): a module using Wasm GC and exception handling
 (a struct type and an array type from a type builder, `struct.new`, `struct.get`,
-`array.new_fixed`, a tag, `throw` caught by `try` and `catch`), built through the C API, validated, and
-written as text and as a binary; and the documentation's example.
+`array.new_fixed`, a tag, `throw`, `try_table` with a `catch_all_ref` and a `catch` clause, and
+`throw_ref`), built through the C API, validated, and written as text and as a binary; and the
+documentation's example.
 
 `.github/workflows/ci.yml` runs on pushes to `main` and on pull requests: `cargo test` on Linux,
 Windows and macOS, and on Linux the check that `src/bindings.rs` is what
