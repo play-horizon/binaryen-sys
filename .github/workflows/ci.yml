@@ -1,0 +1,71 @@
+# Builds Binaryen and runs the tests on Linux, Windows and macOS; on Linux, also checks the
+# formatting, Clippy, the API docs, and that src/bindings.rs is exactly what
+# scripts/regenerate-bindings.sh generates from the pinned Binaryen. Runs on pushes to main and on
+# pull requests, and is called by the update workflow on the commit it prepared (`ref`).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call:
+    inputs:
+      ref:
+        description: The commit to check.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+          submodules: true
+          persist-credentials: false
+
+      - id: binaryen
+        shell: bash
+        run: echo "commit=$(git rev-parse HEAD:binaryen)" >> "$GITHUB_OUTPUT"
+
+      # Binaryen's build, reused while the toolchain, the build script and the pinned release
+      # don't change.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: target/
+          key: target-${{ runner.os }}-${{ steps.binaryen.outputs.commit }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock', 'build.rs') }}
+
+      - run: cargo test --locked
+
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      RUSTDOCFLAGS: -D warnings
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+          submodules: true
+          persist-credentials: false
+
+      - run: cargo install bindgen-cli --version 0.73.2 --locked
+
+      - run: scripts/regenerate-bindings.sh
+
+      - run: git diff --exit-code src/bindings.rs
+
+      - run: cargo fmt --check
+
+      - run: cargo clippy --locked --all-targets -- --deny warnings
+
+      - run: cargo doc --locked --no-deps
