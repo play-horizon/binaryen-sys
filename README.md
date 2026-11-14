@@ -7,12 +7,12 @@ links it in.
 
 ## Using it
 
-Depend on a tag of this repository, the latest one (the repository's Tags page) for the latest
-Binaryen release ([Versions](#versions)), here `v133.0.2`:
+Depend on a tag of this repository: the latest one (the repository's Tags page) is on the latest
+Binaryen release ([Versions](#versions)).
 
 ```toml
 [dependencies]
-binaryen-sys = { git = "https://github.com/play-horizon/binaryen-sys.git", tag = "v133.0.2" }
+binaryen-sys = { git = "https://github.com/play-horizon/binaryen-sys.git", tag = "v<N>.<x>.<y>" }
 ```
 
 Building needs CMake 3.16.3 or later and a C++20 compiler: GCC or Clang on Linux, the Xcode
@@ -57,14 +57,24 @@ with `gh workflow run update.yml`:
 1. **prepare** runs `scripts/update-binaryen.sh`, which finds the latest `version_<N>` tag of
    `WebAssembly/binaryen`. If the crate is already on it, the run ends there. Otherwise the script
    points the `binaryen` submodule at the tag, regenerates `src/bindings.rs`, and sets the
-   version to `<N>.0.0` in `Cargo.toml` and `Cargo.lock`; the job commits that as
-   `BUILD: Binaryen version_<N>` and pushes it to the branch `update-binaryen`, replacing what
-   an earlier run left there, but never a person's commits: when the branch holds any, the run
-   fails instead.
-2. **test** runs the CI workflow on that commit: the build and the tests on Linux, Windows and
-   macOS, and the checks on Linux.
-3. **release** fast-forwards `main` to the commit and tags it `v<N>.0.0`, in one atomic push,
+   version to `<N>.0.0` in `Cargo.toml` and `Cargo.lock`; the job hands on the tag and the patch
+   of `src/bindings.rs`. It can't write to the repository: it builds and runs third-party code
+   (bindgen-cli and its dependencies).
+2. **push** writes the same update from those two alone, with git and the toolchain's cargo
+   (no third-party code): it checks the tag names a newer release, points the submodule at the
+   commit `WebAssembly/binaryen` tags with it, applies the patch to `src/bindings.rs` and to no
+   other file, and sets the version. It commits that as `BUILD: Binaryen version_<N>` and pushes
+   it to the branch `update-binaryen`, replacing what an earlier run left there, but never a
+   person's commits: when the branch holds any (authored or committed by someone else than the
+   workflow), the run fails instead.
+3. **test** runs the CI workflow on that commit: the build and the tests on Linux, Windows and
+   macOS, and the checks on Linux (among them, that `src/bindings.rs` is what the pinned Binaryen
+   generates).
+4. **release** fast-forwards `main` to the commit and tags it `v<N>.0.0`, in one atomic push,
    then deletes `update-binaryen`.
+
+Only **push** and **release** hold a token that may write, each in the step that pushes, with no
+credential on disk before it; neither runs third-party code.
 
 If any step fails, `main` and the tags stay as they were, and the next run tries again. A release
 that changes the C API in a way the bindings can't express, or that breaks the build, needs a
@@ -73,13 +83,9 @@ branch alone and its runs fail, which shows the update is in a person's hands), 
 (run on a pull request from the branch), push it to `main` with the version and the tag the
 workflow would have given it, and delete the branch.
 
-The token the workflow pushes with is given only to the steps that push: the steps that build
-third-party code (bindgen-cli and its dependencies, Binaryen) run with no credential on disk.
-
-GitHub disables a scheduled workflow of a public repository after 60 days without activity in
-it, and says so by email to the repository's admins; Binaryen releases come about every month or
-two, so a quiet stretch can do it. Re-enable it from the Actions tab (or with
-`gh workflow enable update.yml`).
+GitHub disables the scheduled workflows of a public repository after 60 days without activity in
+it, and Binaryen releases come about every month or two, so a quiet stretch can pause the
+updates: re-enable the workflow from the Actions tab (or with `gh workflow enable update.yml`).
 
 Moving a project that depends on the crate to the new release is a change of tag in that project.
 
