@@ -8,11 +8,11 @@ links it in.
 ## Using it
 
 Depend on a tag of this repository, the latest one (the repository's Tags page) for the latest
-Binaryen release ([Versions](#versions)), here `v133.0.1`:
+Binaryen release ([Versions](#versions)), here `v133.0.2`:
 
 ```toml
 [dependencies]
-binaryen-sys = { git = "https://github.com/play-horizon/binaryen-sys.git", tag = "v133.0.1" }
+binaryen-sys = { git = "https://github.com/play-horizon/binaryen-sys.git", tag = "v133.0.2" }
 ```
 
 Building needs CMake 3.16.3 or later and a C++20 compiler: GCC or Clang on Linux, the Xcode

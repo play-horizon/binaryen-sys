@@ -3,7 +3,7 @@
 # update workflow sets it, and our own fixes bump the minor or patch version (README.md).
 [package]
 name = "binaryen-sys"
-version = "133.0.1"
+version = "133.0.2"
 edition = "2024"
 rust-version = "1.99"
 authors = ["Sergey Pepyakin <s.pepyakin@gmail.com>", "The binaryen-sys contributors"]
