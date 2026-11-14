@@ -139,8 +139,8 @@ Moving a project that depends on the crate to the new release is a change of tag
 
 ## By hand
 
-The scripts are bash and need, besides Cargo, `git`, network access and GNU coreutils, find and
-sed (as on Linux):
+The scripts are bash and need, besides Cargo, `git`, network access and GNU coreutils,
+diffutils, find, grep and sed (as on Linux):
 
 - `scripts/vendor-binaryen.sh version_<N>` replaces `binaryen/` with that release's sources and
   records it in `binaryen-release`; `scripts/vendor-binaryen.sh --check` checks the vendored tree
@@ -181,15 +181,17 @@ The crate's own code is licensed under the Apache License 2.0 ([LICENSE](LICENSE
 Binaryen itself ([binaryen/LICENSE](binaryen/LICENSE)). The vendored sources keep their licences
 and notices, as upstream has them:
 
-- Binaryen: Apache 2.0.
+- Binaryen: Apache 2.0, except its suffix tree (`src/support/suffix_tree*`), which began as LLVM
+  code and is under LLVM's licence, Apache 2.0 with LLVM exceptions (in the files).
 - FP16: MIT ([binaryen/third_party/FP16/LICENSE](binaryen/third_party/FP16/LICENSE)).
 - LLVM's DWARF support (`binaryen/third_party/llvm-project/`): Apache 2.0 with LLVM exceptions,
   the project's licence, which also gives the legacy University of Illinois/NCSA licence its older
   code came under ([include/llvm/LICENSE.TXT](binaryen/third_party/llvm-project/include/llvm/LICENSE.TXT));
-  the NCSA licence alone for its system interface code (`Unix/`,
+  the NCSA licence too for its system interface code (`Unix/`,
   [include/llvm/Support/LICENSE.TXT](binaryen/third_party/llvm-project/include/llvm/Support/LICENSE.TXT));
-  Unicode's licence for `ConvertUTF.cpp` (in the file); and `MD5.cpp` is in the public domain,
-  with a permissive grant where that doesn't hold (in the file).
+  Unicode's licence too for its UTF conversions (in `ConvertUTF.cpp` and
+  `include/llvm/Support/ConvertUTF.h`); and its MD5 (`MD5.cpp`, `include/llvm/Support/MD5.h`) is
+  in the public domain, with a permissive grant where that doesn't hold (in the files).
 
 The library the crate links in is made of all of them, which `Cargo.toml`'s `license` states as
 `Apache-2.0 AND Apache-2.0 WITH LLVM-exception AND NCSA AND Unicode-DFS-2015 AND MIT` (SPDX has no
