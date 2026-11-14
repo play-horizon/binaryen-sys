@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Moves the crate to a newer Binaryen release: points the `binaryen` submodule at the release's
-# tag, regenerates src/bindings.rs (scripts/regenerate-bindings.sh) and sets the crate's version
-# to `<release number>.0.0`, in Cargo.toml and Cargo.lock. It commits nothing: the update
-# workflow builds and tests the result, then commits and tags it.
+# Moves the crate to a newer Binaryen release: vendors the release's sources
+# (scripts/vendor-binaryen.sh), regenerates src/bindings.rs (scripts/regenerate-bindings.sh) and
+# sets the crate's version to `<release number>.0.0`, in Cargo.toml and Cargo.lock. It commits
+# nothing: the update workflow builds and tests the result, then commits and tags it.
 #
 # Usage: scripts/update-binaryen.sh [version_<N>]
 #   With no argument, the latest release tag of WebAssembly/binaryen. It does nothing when the
@@ -29,8 +29,7 @@ if [[ -n "$current" && "$current" -ge "$release" ]]; then
 	exit 0
 fi
 
-git -C binaryen fetch --depth=1 origin "refs/tags/$tag:refs/tags/$tag"
-git -C binaryen checkout --detach --quiet "$tag"
+scripts/vendor-binaryen.sh "$tag"
 scripts/regenerate-bindings.sh
 sed "0,/^version = .*/s//version = \"$release.0.0\"/" Cargo.toml >Cargo.toml.new
 mv Cargo.toml.new Cargo.toml

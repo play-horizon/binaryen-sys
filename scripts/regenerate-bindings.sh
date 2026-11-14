@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Regenerates src/bindings.rs, the bindings to every type and function `binaryen-c.h` declares,
-# from the Binaryen source the `binaryen` submodule pins, with bindgen-cli at the version below
+# from the vendored Binaryen sources (binaryen/), with bindgen-cli at the version below
 # (it needs libclang). CI runs it and fails when the checked-in file differs.
 #
 # Usage: scripts/regenerate-bindings.sh

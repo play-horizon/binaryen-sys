@@ -1,13 +1,15 @@
-# Raw bindings to the C API of Binaryen, built from the Binaryen release the `binaryen`
-# submodule pins. The major version is that release's number (`version_133` is 133.0.0); the
-# update workflow sets it, and our own fixes bump the minor or patch version (README.md).
+# Raw bindings to the C API of Binaryen, built from the Binaryen release vendored in binaryen/
+# (binaryen-release names it). The major version is that release's number (`version_133` is
+# 133.0.0); the update workflow sets it, and our own fixes bump the minor or patch version
+# (README.md).
 [package]
 name = "binaryen-sys"
 version = "133.0.3"
 edition = "2024"
 rust-version = "1.99"
 authors = ["Sergey Pepyakin <s.pepyakin@gmail.com>", "The binaryen-sys contributors"]
-license = "Apache-2.0"
+# The crate's code and Binaryen's, then the vendored LLVM (DWARF support) and FP16.
+license = "Apache-2.0 AND Apache-2.0 WITH LLVM-exception AND MIT"
 repository = "https://github.com/play-horizon/binaryen-sys"
 description = "Raw bindings to the C API of Binaryen, the WebAssembly compiler and optimizer library"
 categories = ["external-ffi-bindings"]

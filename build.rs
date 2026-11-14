@@ -1,26 +1,17 @@
-//! Builds Binaryen from the `binaryen` submodule with CMake, as a static library in its release
-//! configuration, and links it with the C++ standard library it needs.
+//! Builds Binaryen from its vendored sources (`binaryen/`) with CMake, as a static library in its
+//! release configuration, and links it with the C++ standard library it needs.
 //!
 //! Only the library is built: no tools, no tests and no link-time
 //! optimisation (whose objects only the compiler that made them could link). Binaryen keeps its
 //! assertions in release builds, so a broken invariant inside it aborts instead of going on.
 
 use std::env;
-use std::path::Path;
 
 fn main() {
-    let source = Path::new("binaryen");
-    if !source.join("CMakeLists.txt").exists() {
-        println!(
-            "cargo::error=the binaryen submodule is missing: run `git submodule update --init`"
-        );
-        return;
-    }
     println!("cargo::rerun-if-changed=build.rs");
-    println!("cargo::rerun-if-changed=binaryen/CMakeLists.txt");
-    println!("cargo::rerun-if-changed=binaryen/src");
+    println!("cargo::rerun-if-changed=binaryen");
 
-    let install = cmake::Config::new(source)
+    let install = cmake::Config::new("binaryen")
         .profile("Release")
         .define("BUILD_SHARED_LIBS", "OFF")
         .define("BUILD_TESTS", "OFF")

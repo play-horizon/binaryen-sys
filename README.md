@@ -16,9 +16,9 @@ binaryen-sys = { git = "https://github.com/play-horizon/binaryen-sys.git", tag =
 ```
 
 Building needs CMake 3.16.3 or later and a C++20 compiler: GCC or Clang on Linux, the Xcode
-command-line tools on macOS, Visual Studio's C++ tools on Windows. Cargo fetches the `binaryen`
-submodule with the crate. The first build compiles Binaryen, which takes a few minutes; Cargo
-reuses it afterwards.
+command-line tools on macOS, Visual Studio's C++ tools on Windows. Binaryen's sources come with
+the crate ([Vendored sources](#vendored-sources)), so Cargo fetches nothing else. The first build
+compiles Binaryen, which takes a few minutes; Cargo reuses it afterwards.
 
 What the build script builds: Binaryen's library only (no tools, no tests), in its release
 configuration, with no link-time optimisation, and with Binaryen's assertions kept, as Binaryen
@@ -39,6 +39,36 @@ matter to any safe wrapper (the crate's documentation says more):
 The buffers the `*AllocateAndWrite*` functions return are released with the crate's `free`, the
 C library's.
 
+## Vendored sources
+
+`binaryen/` holds the part of a Binaryen release that the build script's static library build
+reads, byte for byte as Binaryen's repository has it at the release's tag, and nothing else:
+
+- the top `CMakeLists.txt`, `config.h.in`, and the three files that `CMakeLists.txt` configures
+  whatever its options (`scripts/binaryen-lit.in`, `test/lit/CMakeLists.txt`,
+  `test/lit/lit.site.cfg.py.in`);
+- `src/`, the library's sources, without `src/tools/` (the command-line tools) and `src/js/`
+  (binaryen.js);
+- `third_party/CMakeLists.txt`, `third_party/FP16/` (half-precision float headers) and
+  `third_party/llvm-project/` (the part of LLVM that reads and writes DWARF);
+- `LICENSE`, Binaryen's licence (Apache 2.0); FP16's (MIT) and LLVM's (Apache 2.0 with LLVM
+  exceptions) are inside their directories.
+
+Left out are the tests, the fuzzers, the tools, binaryen.js, the documentation, and Binaryen's own
+submodules (googletest, fuzztest, mimalloc, the spec test suite), which only its tests, fuzzers
+and mimalloc build use. That is 722 files; the packaged crate is 9.8 MiB, 2.1 MiB compressed. The
+list is in `scripts/vendor-binaryen.sh`. `.gitattributes` keeps git from changing the files'
+line endings on any platform.
+
+`binaryen-release` records the release: its tag (`version_<N>`) and the commit the tag names in
+`WebAssembly/binaryen`. `scripts/vendor-binaryen.sh --check` checks the vendored tree against
+them: it fetches that subset of the tag from Binaryen's repository (a shallow, blobless clone,
+which fetches only those files, each checked by git against the commit's id), fails if the tag no
+longer names the recorded commit, and compares it with `binaryen/`: the same files, the same
+bytes, the same executable bits. CI runs it on every push and pull request, and on every update
+the workflow makes. Nobody edits `binaryen/` by hand: a fix Binaryen needs goes upstream, and the
+crate takes it with the release that has it.
+
 ## Versions
 
 The crate's major version is the number of the Binaryen release it is built on: Binaryen's
@@ -55,26 +85,28 @@ every version on `main` is tagged.
 with `gh workflow run update.yml`:
 
 1. **prepare** runs `scripts/update-binaryen.sh`, which finds the latest `version_<N>` tag of
-   `WebAssembly/binaryen`. If the crate is already on it, the run ends there. Otherwise the script
-   points the `binaryen` submodule at the tag, regenerates `src/bindings.rs`, and sets the
-   version to `<N>.0.0` in `Cargo.toml` and `Cargo.lock`; the job hands on the tag and the new
-   `src/bindings.rs`. It can't write to the repository: it builds and runs third-party code
-   (bindgen-cli and its dependencies).
-2. **push** writes the same update from those two alone, with git and the toolchain's cargo
-   (no third-party code): it checks the tag names a newer release, points the submodule at the
-   commit `WebAssembly/binaryen` tags with it, writes the bindings to `src/bindings.rs` (the one
-   file it takes from **prepare**), and sets the version. It commits that as `BUILD: Binaryen version_<N>` and pushes
-   it to the branch `update-binaryen`, replacing what an earlier run left there, but never a
-   person's commits: when the branch holds any (authored or committed by someone else than the
-   workflow), the run fails instead.
+   `WebAssembly/binaryen`. If the crate is already on it, the job reports that Binaryen is up to
+   date and the run ends there. Otherwise the script vendors the release's sources
+   (`scripts/vendor-binaryen.sh version_<N>`, which replaces `binaryen/` and `binaryen-release`),
+   regenerates `src/bindings.rs`, and sets the version to `<N>.0.0` in `Cargo.toml` and
+   `Cargo.lock`; the job hands on the tag and the new `src/bindings.rs`. It can't write to the
+   repository: it builds and runs third-party code (bindgen-cli and its dependencies).
+2. **push** writes the same update itself from those two alone, with this repository's scripts,
+   git and the toolchain's cargo (no third-party code): it checks the tag names a newer release,
+   vendors the release's sources from Binaryen's repository with `scripts/vendor-binaryen.sh`,
+   writes the bindings to `src/bindings.rs` (the one file it takes from **prepare**), and sets
+   the version. It commits that as `BUILD: Binaryen version_<N>` and pushes it to the branch
+   `update-binaryen`, replacing what an earlier run left there, but never a person's commits:
+   when the branch holds any (authored or committed by someone else than the workflow), the run
+   fails instead.
 3. **test** runs the CI workflow on that commit: the build and the tests on Linux, Windows and
-   macOS, and the checks on Linux (among them, that `src/bindings.rs` is what the pinned Binaryen
-   generates).
+   macOS, and the checks on Linux (among them, that `binaryen/` is exactly the release's sources
+   and that `src/bindings.rs` is what they generate).
 4. **release** fast-forwards `main` to the commit and tags it `v<N>.0.0`, in one atomic push,
    then deletes `update-binaryen`.
 
-Only **push** and **release** hold a token that may write, each in the step that pushes, with no
-credential on disk before it; neither runs third-party code.
+Only **push** and **release** hold a token that may write to the repository, each in the step
+that pushes, with no credential on disk before it; neither runs third-party code.
 
 If any step fails, `main` and the tags stay as they were, and the next run tries again. A release
 that changes the C API in a way the bindings can't express, or that breaks the build, needs a
@@ -93,7 +125,10 @@ Moving a project that depends on the crate to the new release is a change of tag
 
 The scripts are bash and need, besides Cargo, `git` and network access:
 
-- `scripts/regenerate-bindings.sh` regenerates `src/bindings.rs` from the pinned Binaryen with
+- `scripts/vendor-binaryen.sh version_<N>` replaces `binaryen/` with that release's sources and
+  records it in `binaryen-release`; `scripts/vendor-binaryen.sh --check` checks the vendored tree
+  ([Vendored sources](#vendored-sources)).
+- `scripts/regenerate-bindings.sh` regenerates `src/bindings.rs` from the vendored Binaryen with
   bindgen-cli 0.73.2 (`cargo install bindgen-cli --version 0.73.2 --locked`), which needs libclang
   (on Ubuntu, `libclang-dev`). Every item of `binaryen-c.h` is bound, with the expression ids it
   declares through `wasm-delegations.def`, and nothing from the C headers it includes.
@@ -110,7 +145,8 @@ The scripts are bash and need, besides Cargo, `git` and network access:
 documentation's example.
 
 `.github/workflows/ci.yml` runs on pushes to `main` and on pull requests: `cargo test` on Linux,
-Windows and macOS, and on Linux the check that `src/bindings.rs` is what
+Windows and macOS, and on Linux the checks that `binaryen/` is exactly the recorded release's
+sources (`scripts/vendor-binaryen.sh --check`) and that `src/bindings.rs` is what
 `scripts/regenerate-bindings.sh` generates, `cargo fmt --check`, Clippy (warnings fail) and the
 API docs (warnings fail). Its actions are pinned to commit SHAs, with the release in a comment.
 
@@ -124,4 +160,9 @@ expression runner), follows the latest Binaryen release and updates itself, uses
 ABI, and dropped the C++ shim (fuzzing and reading helpers that aren't part of the C API) and the
 generated list of passes.
 
-Licensed under the Apache License 2.0 ([LICENSE](LICENSE)), like Binaryen itself.
+The crate's own code is licensed under the Apache License 2.0 ([LICENSE](LICENSE)), like
+Binaryen itself ([binaryen/LICENSE](binaryen/LICENSE)). The vendored sources keep their licences:
+Binaryen's, Apache 2.0; FP16's, MIT ([binaryen/third_party/FP16/LICENSE](binaryen/third_party/FP16/LICENSE));
+LLVM's, Apache 2.0 with LLVM exceptions
+([binaryen/third_party/llvm-project/include/llvm/LICENSE.TXT](binaryen/third_party/llvm-project/include/llvm/LICENSE.TXT)).
+The library the crate links in is made of all three, which `Cargo.toml`'s `license` states.

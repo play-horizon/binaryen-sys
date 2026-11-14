@@ -1,0 +1,4 @@
+# The Binaryen release vendored in binaryen/, written by scripts/vendor-binaryen.sh, which checks
+# it with --check.
+tag version_133
+commit fba5005a132d85d578be5bd010e0487ed8e2ce3e

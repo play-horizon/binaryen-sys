@@ -1,0 +1,2 @@
+# The vendored Binaryen stays byte for byte as upstream has it, on every platform.
+binaryen/** -text
