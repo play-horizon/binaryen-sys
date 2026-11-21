@@ -27,7 +27,8 @@ What the build script builds: Binaryen's library only (no tools, no tests), in i
 configuration, with no link-time optimisation, and with Binaryen's assertions kept, as Binaryen
 does by default, so that a broken invariant inside it aborts rather than going on. The C++
 standard library is linked for the target (libstdc++ on Linux, libc++ on macOS, MSVC's own on
-Windows).
+Windows). On docs.rs (`DOCS_RS` set), it builds nothing, since documenting the crate doesn't link
+it.
 
 Everything is `unsafe` and follows the contract `binaryen-c.h` documents. Three points of it
 matter to any safe wrapper (the crate's documentation says more):
@@ -213,9 +214,9 @@ documentation's example.
 Windows and macOS; on Linux the checks that `binaryen/` is exactly the recorded release's
 sources (`scripts/vendor-binaryen.sh --check`), that `src/bindings.rs` is what
 `scripts/regenerate-bindings.sh` generates, `cargo fmt --check`, Clippy (warnings fail), the API
-docs (warnings fail) and [the C API check](#the-c-api-check); and `cargo deny check`
-([Dependencies](#dependencies)). Its actions are pinned to commit SHAs, with the release in a
-comment, and the tools it installs to exact versions.
+docs (warnings fail) and [the C API check](#the-c-api-check); `cargo package`, which builds the
+crate from its package; and `cargo deny check` ([Dependencies](#dependencies)). Its actions are
+pinned to commit SHAs, with the release in a comment, and the tools it installs to exact versions.
 
 ## Origin and licence
 

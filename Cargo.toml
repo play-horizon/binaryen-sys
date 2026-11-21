@@ -12,12 +12,27 @@ authors = ["Sergey Pepyakin <s.pepyakin@gmail.com>", "The binaryen-sys-next cont
 # licence, the NCSA licence of its system interface code, Unicode's for ConvertUTF.cpp), then
 # FP16's (README.md, "Origin and licence").
 license = "Apache-2.0 AND Apache-2.0 WITH LLVM-exception AND NCSA AND Unicode-DFS-2015 AND MIT"
-repository = "https://github.com/play-horizon/binaryen-sys-next"
 description = "Raw bindings to the C API of Binaryen, the WebAssembly compiler and optimizer library"
-categories = ["external-ffi-bindings"]
+repository = "https://github.com/play-horizon/binaryen-sys-next"
+documentation = "https://docs.rs/binaryen-sys-next"
+readme = "README.md"
+keywords = ["binaryen", "webassembly", "wasm", "compiler", "ffi"]
+categories = ["external-ffi-bindings", "wasm", "compilers"]
 links = "binaryen"
-publish = false
 autotests = false
+# What building and testing the crate reads, and its licences: not the scripts and workflows that
+# maintain it.
+include = [
+    "/Cargo.toml",
+    "/Cargo.lock",
+    "/LICENSE",
+    "/README.md",
+    "/binaryen/",
+    "/binaryen-release",
+    "/build.rs",
+    "/src/",
+    "/tests/",
+]
 
 [build-dependencies]
 cmake = "0.1.58"

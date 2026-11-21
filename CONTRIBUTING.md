@@ -36,7 +36,10 @@ scripts/vendor-binaryen.sh --check
 scripts/regenerate-bindings.sh && git diff --exit-code src/bindings.rs
 scripts/check-c-api.sh
 cargo deny --locked check
+cargo package --locked
 ```
+
+(`cargo package` packages what is committed: commit first, or add `--allow-dirty`.)
 
 Commit subjects are `TYPE: summary`, under 50 characters, with one of the types `FEAT`, `FIX`,
 `DOCS`, `STYLE`, `REFACTOR`, `PERF`, `TEST`, `BUILD`, `CI` and `CHORE`; a body only when the change

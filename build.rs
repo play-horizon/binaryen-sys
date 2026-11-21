@@ -4,12 +4,19 @@
 //! Only the library is built: no tools, no tests and no link-time
 //! optimisation (whose objects only the compiler that made them could link). Binaryen keeps its
 //! assertions in release builds, so a broken invariant inside it aborts instead of going on.
+//!
+//! On docs.rs (`DOCS_RS` set), it builds nothing: documenting the crate doesn't link it, and the
+//! few minutes Binaryen's build takes would only slow docs.rs down.
 
 use std::env;
 
 fn main() {
     println!("cargo::rerun-if-changed=build.rs");
     println!("cargo::rerun-if-changed=binaryen");
+    println!("cargo::rerun-if-env-changed=DOCS_RS");
+    if env::var_os("DOCS_RS").is_some() {
+        return;
+    }
 
     let install = cmake::Config::new("binaryen")
         .profile("Release")
