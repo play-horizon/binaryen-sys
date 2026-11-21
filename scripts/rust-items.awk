@@ -34,11 +34,11 @@ function normalized_code(code) {
 }
 
 # `text` with the names of the parameters of every function and function pointer in it taken out:
-# each `name: ` directly inside the parentheses that follow `fn` or `fn <name>`.
+# each `name: ` directly inside the parentheses that follow `fn`, `fn <name>` or `fn <name><...>`.
 function without_parameter_names(text,    result, rest, depth, character, inside) {
 	result = ""
 	rest = text
-	while (match(rest, /fn( [A-Za-z0-9_]+)?\(/)) {
+	while (match(rest, /fn( [A-Za-z0-9_]+(<[^()]*>)?)?\(/)) {
 		result = result substr(rest, 1, RSTART + RLENGTH - 1)
 		rest = substr(rest, RSTART + RLENGTH)
 		depth = 1

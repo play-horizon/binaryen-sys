@@ -1,0 +1,24 @@
+bindings.h after the parameters renamed (some long enough to rewrap their line) and documentation added.
+--- bindings.h
++++ bindings.h
+@@ -30,13 +30,15 @@
+ 
+ // Callbacks: a type, a field, a parameter of a callback type followed by another one, and two
+ // callbacks written out in a parameter list before a third parameter.
+-typedef int32_t (*Visitor)(int32_t value, void* user_data);
+-struct Listener { void (*on_event)(int32_t event_kind, void* user_data); };
+-void SetVisitor(Visitor visitor, void* user_data);
+-void SetHandlers(void (*on_start)(int32_t code), int32_t (*on_end)(int32_t code, void* state), void* user_data);
++/** Visits a value. */
++typedef int32_t (*Visitor)(int32_t visited_value_with_a_long_name, void* the_user_data_given_to_the_visitor);
++struct Listener { void (*on_event)(int32_t kind_of_event_with_a_long_name, void* the_user_data_given_to_the_listener); };
++/** Sets the visitor. */
++void SetVisitor(Visitor callback, void* context);
++void SetHandlers(void (*started)(int32_t reason), int32_t (*ended)(int32_t reason, void* handler_state), void* the_context_of_the_handlers);
+ 
+ // A function with several parameters, a variadic one, a constant array and a mutable variable.
+-int32_t Combine(int32_t first, int64_t second, const char* label);
++int32_t Combine(int32_t the_first_operand, int64_t the_second_operand, const char* a_label_for_it);
+ int32_t Print(const char* format, ...);
+ extern const char* const names[4];
+ extern int32_t counter;

@@ -1,10 +1,11 @@
 # Builds Binaryen and runs the tests on Linux, Windows and macOS; on Linux, also checks that
 # binaryen/ is exactly upstream's sources at the release binaryen-release names, that
 # src/bindings.rs is exactly what scripts/regenerate-bindings.sh generates from them and covers
-# the C API exactly (scripts/check-c-api.sh), the formatting, Clippy and the API docs; builds the
-# crate from its package, as crates.io would serve it; and checks the dependencies with cargo-deny
-# (deny.toml). Runs on pushes to main and on pull requests, and is called by the update workflow
-# on the commit it prepared and by the release workflow on the tagged one (`ref`).
+# the C API exactly (scripts/check-c-api.sh, whose scripts scripts/test-scripts.sh tests), the
+# formatting, Clippy and the API docs; builds the crate from its package, as crates.io would serve
+# it; and checks the dependencies with cargo-deny (deny.toml). Runs on pushes to main and on pull
+# requests, and is called by the update workflow on the commit it prepared and by the release
+# workflow on the tagged one (`ref`).
 name: CI
 
 on:
@@ -57,8 +58,9 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      # GNU awk, which the C API check needs, installed so that it doesn't depend on the image.
-      - run: sudo apt-get update --quiet && sudo apt-get install --yes --no-install-recommends gawk
+      # GNU awk and patch, which the C API check and its tests need, installed so that they don't
+      # depend on the image.
+      - run: sudo apt-get update --quiet && sudo apt-get install --yes --no-install-recommends gawk patch
 
       - run: scripts/vendor-binaryen.sh --check
 
@@ -73,6 +75,8 @@ jobs:
       - run: cargo clippy --locked --all-targets -- --deny warnings
 
       - run: cargo doc --locked --no-deps
+
+      - run: scripts/test-scripts.sh
 
       - run: scripts/check-c-api.sh
 

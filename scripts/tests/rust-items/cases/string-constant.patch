@@ -1,0 +1,12 @@
+bindings.h after two spaces of the string constant moved, its length kept.
+--- bindings.h
++++ bindings.h
+@@ -5,7 +5,7 @@
+ #include <stdint.h>
+ 
+ // A string constant whose literal holds spaces, brackets and something like a parameter.
+-#define GREETING "fn(a: b)  ( x , y )"
++#define GREETING "fn(a: b) ( x ,  y )"
+ #define LIMIT 64
+ 
+ // Enumerators whose values bindgen computes, through casts and `sizeof`.

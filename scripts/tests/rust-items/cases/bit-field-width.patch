@@ -1,0 +1,12 @@
+bindings.h after a bit-field narrowed, the storage unit kept.
+--- bindings.h
++++ bindings.h
+@@ -15,7 +15,7 @@
+ typedef struct { int32_t width; int64_t height; } Size;
+ 
+ // Bit-fields, whose widths only bindgen's accessors hold.
+-struct Bits { unsigned low : 3; unsigned high : 5; };
++struct Bits { unsigned low : 2; unsigned high : 5; };
+ 
+ // Layouts set by attributes.
+ struct __attribute__((packed)) Packed { char tag; int32_t value; };

@@ -238,6 +238,8 @@ diffutils, find, grep and sed (as on Linux):
 - `scripts/check-c-api.sh` runs [the C API check](#the-c-api-check); it also needs clang, jq, GNU
   awk (gawk), GNU nm and the repository's whole history.
 - `scripts/check-outdated.sh` lists the outdated direct dependencies; it also needs curl and jq.
+- `scripts/test-scripts.sh` runs the scripts' tests ([Tests and CI](#tests-and-ci)); it also needs
+  bindgen-cli, GNU awk (gawk) and patch.
 
 [CONTRIBUTING.md](CONTRIBUTING.md) says how to check a change before a pull request, and how to
 finish an update by hand.
@@ -250,13 +252,26 @@ finish an update by hand.
 `throw_ref`), built through the C API, validated, and written as text and as a binary; and the
 documentation's example.
 
+`scripts/test-scripts.sh` tests the scripts the C API check is made of. `scripts/rust-items.awk`
+reads a fixture, `scripts/tests/rust-items/bindings.rs` (bindgen's output for `bindings.h`, which
+the test checks, with one declaration of each shape the reader must get right: string constants,
+enumerators computed through casts, an anonymous struct named by its typedef, bit-fields, packed and
+aligned structs, nested types, callbacks), into exactly `expected.txt`, a snapshot reviewed like
+code. Each case of `cases/` changes `bindings.h` or bindgen's ABI, and the items of bindgen's new
+output that differ must be exactly the ones its `.changed` file names, by hand (none for a change of
+parameter names, line breaks and documentation). `scripts/previous-release.sh` runs on a history the
+test makes: the last commit of the previous release along the first parents, past a merge from
+another release, past a change of `binaryen-release` that keeps its tag, up to a commit with none,
+for a committed and an uncommitted release, and its refusals.
+
 `.github/workflows/ci.yml` runs on pushes to `main` and on pull requests: `cargo test` on Linux,
-Windows and macOS; on Linux the checks that `binaryen/` is exactly the recorded release's
-sources (`scripts/vendor-binaryen.sh --check`), that `src/bindings.rs` is what
+Windows and macOS; on Linux the checks that `binaryen/` is exactly the recorded release's sources
+(`scripts/vendor-binaryen.sh --check`), that `src/bindings.rs` is what
 `scripts/regenerate-bindings.sh` generates, `cargo fmt --check`, Clippy (warnings fail), the API
-docs (warnings fail) and [the C API check](#the-c-api-check); `cargo package`, which builds the
-crate from its package; and `cargo deny check` ([Dependencies](#dependencies)). Its actions are
-pinned to commit SHAs, with the release in a comment, and the tools it installs to exact versions.
+docs (warnings fail), the scripts' tests and [the C API check](#the-c-api-check); `cargo package`,
+which builds the crate from its package; and `cargo deny check` ([Dependencies](#dependencies)). Its
+actions are pinned to commit SHAs, with the release in a comment, and the tools it installs to exact
+versions.
 
 ## Origin and licence
 

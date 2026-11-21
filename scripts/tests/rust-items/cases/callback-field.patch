@@ -1,0 +1,12 @@
+bindings.h after a parameter of a callback field widened.
+--- bindings.h
++++ bindings.h
+@@ -31,7 +31,7 @@
+ // Callbacks: a type, a field, a parameter of a callback type followed by another one, and two
+ // callbacks written out in a parameter list before a third parameter.
+ typedef int32_t (*Visitor)(int32_t value, void* user_data);
+-struct Listener { void (*on_event)(int32_t event_kind, void* user_data); };
++struct Listener { void (*on_event)(int64_t event_kind, void* user_data); };
+ void SetVisitor(Visitor visitor, void* user_data);
+ void SetHandlers(void (*on_start)(int32_t code), int32_t (*on_end)(int32_t code, void* state), void* user_data);
+ 

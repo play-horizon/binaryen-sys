@@ -1,0 +1,12 @@
+bindings.h after an enumerator given by `sizeof` of a wider type.
+--- bindings.h
++++ bindings.h
+@@ -9,7 +9,7 @@
+ #define LIMIT 64
+ 
+ // Enumerators whose values bindgen computes, through casts and `sizeof`.
+-enum Flags { FLAG_ONE = 1u, FLAG_EIGHT = 1u << 3, FLAG_INT_SIZE = sizeof(int), FLAG_NEXT };
++enum Flags { FLAG_ONE = 1u, FLAG_EIGHT = 1u << 3, FLAG_INT_SIZE = sizeof(int64_t), FLAG_NEXT };
+ 
+ // An anonymous struct named by its typedef.
+ typedef struct { int32_t width; int64_t height; } Size;

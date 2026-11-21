@@ -1,0 +1,12 @@
+bindings.h after the parameter after two callbacks written out made `const`.
+--- bindings.h
++++ bindings.h
+@@ -33,7 +33,7 @@
+ typedef int32_t (*Visitor)(int32_t value, void* user_data);
+ struct Listener { void (*on_event)(int32_t event_kind, void* user_data); };
+ void SetVisitor(Visitor visitor, void* user_data);
+-void SetHandlers(void (*on_start)(int32_t code), int32_t (*on_end)(int32_t code, void* state), void* user_data);
++void SetHandlers(void (*on_start)(int32_t code), int32_t (*on_end)(int32_t code, void* state), const void* user_data);
+ 
+ // A function with several parameters, a variadic one, a constant array and a mutable variable.
+ int32_t Combine(int32_t first, int64_t second, const char* label);

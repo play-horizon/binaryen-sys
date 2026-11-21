@@ -1,0 +1,12 @@
+bindings.h after a field of the anonymous struct named by a typedef narrowed.
+--- bindings.h
++++ bindings.h
+@@ -12,7 +12,7 @@
+ enum Flags { FLAG_ONE = 1u, FLAG_EIGHT = 1u << 3, FLAG_INT_SIZE = sizeof(int), FLAG_NEXT };
+ 
+ // An anonymous struct named by its typedef.
+-typedef struct { int32_t width; int64_t height; } Size;
++typedef struct { int32_t width; int32_t height; } Size;
+ 
+ // Bit-fields, whose widths only bindgen's accessors hold.
+ struct Bits { unsigned low : 3; unsigned high : 5; };

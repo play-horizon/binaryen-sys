@@ -21,13 +21,13 @@
 # The declarations come from clang's syntax tree of binaryen-c.h, independently of bindgen: its
 # top-level ones, minus those of the C headers it includes (a file of those includes alone, parsed
 # the same way). The library's functions come from `nm` on the static library the build script
-# builds. The previous release's bindings come from the git history: src/bindings.rs at the newest
-# commit, going back from HEAD along the first parents, whose binaryen-release names another
-# release (none when the walk reaches a commit with no binaryen-release first), compared item by
-# item with the current ones (scripts/rust-items.awk), so what bindgen computes counts (layouts,
-# enumerator values, bit-field widths, the ABI) and what doesn't change the API doesn't (parameter
-# names, documentation). CI runs it after regenerating the bindings, so the update workflow runs it
-# on every new Binaryen release.
+# builds. The previous release's bindings come from the git history (scripts/previous-release.sh):
+# src/bindings.rs at the newest commit, going back from HEAD along the first parents, whose
+# binaryen-release names another release (none when the walk reaches a commit with no
+# binaryen-release first), compared item by item with the current ones (scripts/rust-items.awk),
+# so what bindgen computes counts (layouts, enumerator values, bit-field widths, the ABI) and what
+# doesn't change the API doesn't (parameter names, documentation). CI runs it after regenerating
+# the bindings, so the update workflow runs it on every new Binaryen release.
 #
 # It needs clang (or the one $CLANG names), jq, GNU nm, GNU awk (gawk), git with the repository's
 # whole history, and the coreutils, on Linux, and runs the crate's build script (`cargo check`).
@@ -36,6 +36,8 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
+# The check parses binaryen-c.h in the language bindgen does (bindgen_clang_options).
+source scripts/bindgen-options.sh
 
 clang="${CLANG:-clang}"
 for tool in "$clang" jq nm gawk git cargo; do
@@ -44,11 +46,6 @@ for tool in "$clang" jq nm gawk git cargo; do
 		exit 1
 	fi
 done
-if [[ "$(git rev-parse --is-shallow-repository)" == true ]]; then
-	echo "the C API check needs the repository's whole history (git fetch --unshallow)" >&2
-	exit 1
-fi
-
 header=binaryen/src/binaryen-c.h
 bindings=src/bindings.rs
 unbound_list=scripts/c-api-unbound.txt
@@ -56,7 +53,6 @@ changes_list=scripts/c-api-changes.txt
 # The Binaryen files the bindings take items from besides binaryen-c.h, as the allowlist of
 # scripts/regenerate-bindings.sh names them.
 allowlisted_includes=(binaryen/src/wasm-delegations.def)
-clang_flags=(-x c -std=c11)
 
 work="$(mktemp --directory)"
 trap 'rm --recursive --force "$work"' EXIT
@@ -86,7 +82,7 @@ report() {
 }
 
 # The files binaryen-c.h includes: `-H` prints each one, after one dot per level of nesting.
-if ! "$clang" "${clang_flags[@]}" -fsyntax-only -H "$header" 2>"$work/includes"; then
+if ! "$clang" "${bindgen_clang_options[@]}" -fsyntax-only -H "$header" 2>"$work/includes"; then
 	cat "$work/includes" >&2
 	exit 1
 fi
@@ -113,13 +109,13 @@ done <"$work/system-headers" >"$work/baseline.h"
 # a top-level enum (named or not): its kind, then its name. Then one line per macro: `macro
 # <name>` or `function-like-macro <name>`.
 declarations() {
-	"$clang" "${clang_flags[@]}" -fsyntax-only -Xclang -ast-dump=json "$1" >"$work/ast.json"
+	"$clang" "${bindgen_clang_options[@]}" -fsyntax-only -Xclang -ast-dump=json "$1" >"$work/ast.json"
 	jq --raw-output '.inner[] | select(.isImplicit | not) |
 		(select(.name != null) | "\(.kind) \(.name)"),
 		(select(.kind == "EnumDecl") | .inner[]? | select(.kind == "EnumConstantDecl") |
 			"EnumConstantDecl \(.name)")' \
 		"$work/ast.json" >"$work/declarations"
-	"$clang" "${clang_flags[@]}" -E -dM "$1" >"$work/macros"
+	"$clang" "${bindgen_clang_options[@]}" -E -dM "$1" >"$work/macros"
 	sed --quiet 's/^#define \([A-Za-z_][A-Za-z0-9_]*\)(.*/function-like-macro \1/p;
 		s/^#define \([A-Za-z_][A-Za-z0-9_]*\)\( .*\)\?$/macro \1/p' "$work/macros" >>"$work/declarations"
 	LC_ALL=C sort --unique "$work/declarations" >"$2"
@@ -180,26 +176,14 @@ done >"$work/undocumented-buffers"
 report "Functions returning a buffer to free that the documentation of \`free\` (src/lib.rs) doesn't name" \
 	"$work/undocumented-buffers"
 
-# The previous release's bindings: those of the newest commit, going back from HEAD along the
-# first parents, whose binaryen-release names another release; none when the history reaches a
-# commit with no binaryen-release first.
+# The previous release's bindings: the commit scripts/previous-release.sh finds, if any.
 release="$(sed --quiet 's/^tag //p' binaryen-release)"
-git rev-list --first-parent HEAD >"$work/history"
+scripts/previous-release.sh >"$work/previous-release"
 previous_commit=""
 previous_release=""
-while read -r commit; do
-	listed="$(git ls-tree --name-only "$commit" -- binaryen-release)"
-	if [[ -z "$listed" ]]; then
-		break
-	fi
-	git show "$commit:binaryen-release" >"$work/release-file"
-	tag="$(sed --quiet 's/^tag //p' "$work/release-file")"
-	if [[ "$tag" != "$release" ]]; then
-		previous_commit="$commit"
-		previous_release="$tag"
-		break
-	fi
-done <"$work/history"
+if [[ -s "$work/previous-release" ]]; then
+	read -r previous_commit previous_release <"$work/previous-release"
+fi
 
 # The reviewed changes: one `release version_<N>` line, then `removed <name> <what was checked>`
 # or `changed <name> <what was checked>` lines, one per name; those of another release don't

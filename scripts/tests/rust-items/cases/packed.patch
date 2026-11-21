@@ -1,0 +1,12 @@
+bindings.h after a struct no longer packed.
+--- bindings.h
++++ bindings.h
+@@ -18,7 +18,7 @@
+ struct Bits { unsigned low : 3; unsigned high : 5; };
+ 
+ // Layouts set by attributes.
+-struct __attribute__((packed)) Packed { char tag; int32_t value; };
++struct Packed { char tag; int32_t value; };
+ struct __attribute__((aligned(16))) Aligned { int32_t value; };
+ 
+ // Nested types, which C gives file scope.

@@ -6,8 +6,10 @@ and workflows ([README.md](README.md)). Most of it is never edited by hand:
 - `binaryen/` is exactly a Binaryen release's sources, written by `scripts/vendor-binaryen.sh`. A
   fix Binaryen needs goes [upstream](https://github.com/WebAssembly/binaryen), and the crate takes
   it with the release that has it.
-- `src/bindings.rs` is what `scripts/regenerate-bindings.sh` generates. A change of the bindings
-  is a change of that script (or of `scripts/c-api-unbound.txt`), then a regeneration.
+- `src/bindings.rs` is what `scripts/regenerate-bindings.sh` generates. A change of the bindings is
+  a change of that script (its allowlist), of `scripts/bindgen-options.sh` (the bindgen-cli version
+  and the options it shares with the scripts' tests and, for clang's language, with the C API check)
+  or of `scripts/c-api-unbound.txt`, then a regeneration.
 
 The hand-written parts are `src/lib.rs` (the crate's documentation, the lint expectations on the
 bindings, the declaration of `free`), `build.rs`, the tests in `tests/`, the scripts, the
@@ -18,8 +20,8 @@ documentation.
 
 - Rust: `rust-toolchain.toml` pins the toolchain, which rustup installs by itself.
 - CMake 3.16.3 or later and a C++20 compiler, to build Binaryen.
-- For the scripts (Linux): bash, git, GNU coreutils, diffutils, find, grep, sed, awk (gawk) and
-  nm, curl, jq, and clang with libclang (on Ubuntu, `clang` and `libclang-dev`).
+- For the scripts (Linux): bash, git, GNU coreutils, diffutils, find, grep, sed, awk (gawk), nm
+  and patch, curl, jq, and clang with libclang (on Ubuntu, `clang` and `libclang-dev`).
 - bindgen-cli 0.73.2: `cargo install bindgen-cli --version 0.73.2 --locked`.
 - cargo-deny 0.22.0: `cargo install cargo-deny --version 0.22.0 --locked`.
 
@@ -35,6 +37,7 @@ cargo test --locked
 RUSTDOCFLAGS='-D warnings' cargo doc --locked --no-deps
 scripts/vendor-binaryen.sh --check
 scripts/regenerate-bindings.sh && git diff --exit-code src/bindings.rs
+scripts/test-scripts.sh
 scripts/check-c-api.sh
 cargo deny --locked check
 cargo package --locked
@@ -46,6 +49,26 @@ Commit subjects are `TYPE: summary`, under 50 characters, with one of the types 
 `DOCS`, `STYLE`, `REFACTOR`, `PERF`, `TEST`, `BUILD`, `CI` and `CHORE`; a body only when the change
 needs explaining. One commit is one focused change. The documentation changes in the same commit
 as what it describes.
+
+### Testing the scripts
+
+`scripts/test-scripts.sh` tests `scripts/rust-items.awk` on a fixture and
+`scripts/previous-release.sh` on a history it makes ([README.md](README.md#tests-and-ci)). When
+`scripts/rust-items.awk` changes what it writes, `scripts/tests/rust-items/expected.txt` changes
+with it, in the same commit: read the new snapshot like code. When `bindings.h`, bindgen-cli's
+version or the options of `scripts/bindgen-options.sh` (which the crate's bindings, the fixture and,
+for clang's language, the C API check share) change, `scripts/test-scripts.sh --regenerate` writes
+`bindings.rs` again (the test fails until then), and the snapshot changes with it.
+
+A case is one change of the C API, or of bindgen's ABI, that the check must see (or ignore). It is
+two or three files of `cases/`, which holds nothing else:
+
+1. Copy `bindings.h`, change the copy, and write
+   `diff --unified --label bindings.h --label bindings.h bindings.h <the copy>`, after a first
+   line saying what changed, to `cases/<name>.patch`. For an ABI, write it (`C`) to
+   `cases/<name>.abi` instead.
+2. Write `cases/<name>.changed` by hand: the names of the items the change must change, sorted,
+   one per line (empty when it changes nothing of the API).
 
 ## Versions and releases
 
@@ -89,7 +112,7 @@ What to do for each failure:
     `allowlisted_includes` in `scripts/check-c-api.sh`; regenerate.
   - *Declared by binaryen-c.h but not in src/bindings.rs*: bindgen didn't bind it, often because
     it can't (a function-like macro, a `static inline` function, a macro whose value isn't a
-    literal). Make bindgen bind it (an option in `scripts/regenerate-bindings.sh`) when it can;
+    literal). Make bindgen bind it (an option in `scripts/bindgen-options.sh`) when it can;
     otherwise add the name to `scripts/c-api-unbound.txt` with the reason. A function is listed
     there only when the library doesn't define it.
   - *In src/bindings.rs but not declared by binaryen-c.h*: the allowlist took an item from
@@ -103,7 +126,7 @@ What to do for each failure:
     for. Remove the entry; regenerate.
   - *Types bindgen bound as opaque blobs*: bindgen couldn't express a type's layout, so the
     bindings would be wrong for it. Find out why (often a new C construct); a newer bindgen-cli
-    or an option of `scripts/regenerate-bindings.sh` may express it.
+    or an option of `scripts/bindgen-options.sh` may express it.
   - *Functions returning a buffer to free that the documentation of `free` doesn't name*: add
     the function to the documentation of `free` in `src/lib.rs`.
   - *Items of the bindings of version_<M> removed or changed in version_<N> that

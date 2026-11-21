@@ -1,0 +1,11 @@
+bindings.h after a function removed.
+--- bindings.h
++++ bindings.h
+@@ -36,7 +36,6 @@
+ void SetHandlers(void (*on_start)(int32_t code), int32_t (*on_end)(int32_t code, void* state), void* user_data);
+ 
+ // A function with several parameters, a variadic one, a constant array and a mutable variable.
+-int32_t Combine(int32_t first, int64_t second, const char* label);
+ int32_t Print(const char* format, ...);
+ extern const char* const names[4];
+ extern int32_t counter;

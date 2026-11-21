@@ -1,0 +1,12 @@
+bindings.h after a field of a nested struct widened.
+--- bindings.h
++++ bindings.h
+@@ -22,7 +22,7 @@
+ struct __attribute__((aligned(16))) Aligned { int32_t value; };
+ 
+ // Nested types, which C gives file scope.
+-struct Outer { struct Inner { int32_t depth; } inner; enum Mode { MODE_A, MODE_B } mode; };
++struct Outer { struct Inner { int64_t depth; } inner; enum Mode { MODE_A, MODE_B } mode; };
+ 
+ // A union and a flexible array.
+ union Number { int32_t integer; float real; };
