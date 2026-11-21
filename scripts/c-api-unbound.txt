@@ -1,0 +1,14 @@
+# The items binaryen-c.h declares that the bindings leave out (scripts/regenerate-bindings.sh
+# passes them to bindgen as blocklisted), one per line: the name, then why. A function is left
+# out only when the library doesn't define it, so that a call to it couldn't link.
+# scripts/check-c-api.sh fails when binaryen-c.h declares an item that is neither bound nor
+# listed here, and when a name listed here is bound, no longer declared, or a function the
+# library defines.
+wasm_binaryen_c_h           The header's include guard, which defines nothing.
+WASM_DEPRECATED             An attribute that marks deprecated functions; the bindings carry no attributes.
+BINARYEN_API                The functions' export attribute, empty outside Emscripten and Windows DLLs.
+BINARYEN_REF                A function-like macro that declares the `*Ref` typedefs, which are bound.
+BinaryenStringIterMove      Declared, but the library doesn't define it.
+BinaryenStringIterNext      Declared, but the library doesn't define it.
+BinaryenStringSliceIter     Declared, but the library doesn't define it.
+BinaryenStringWTF8Advance   Declared, but the library doesn't define it.

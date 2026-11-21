@@ -2,8 +2,11 @@
 
 Raw Rust bindings to the **C API** of [Binaryen](https://github.com/WebAssembly/binaryen),
 the WebAssembly compiler and optimizer library: every type and function `binaryen-c.h` declares,
-on the latest Binaryen release. The crate builds Binaryen from source, as a static library, and
-links it in.
+but the functions its library doesn't define, on the latest Binaryen release, checked against the
+header and the library on every change ([The C API check](#the-c-api-check)). The crate builds
+Binaryen from source, as a static library, and links it in. A new Binaryen release becomes a
+new version of the crate by itself, tested and tagged, unless it needs a change of the crate
+([How a new Binaryen release becomes a tag](#how-a-new-binaryen-release-becomes-a-tag)).
 
 ## Using it
 
@@ -99,18 +102,48 @@ with `gh workflow run update.yml`:
    `update-binaryen`, replacing what an earlier run left there, but never a person's commits:
    when the branch holds any (authored or committed by someone else than the workflow), the run
    fails instead.
-3. **test** runs the CI workflow on that commit: the build and the tests on Linux, Windows and
-   macOS, and the checks on Linux (among them, that `binaryen/` is exactly the release's sources
-   and that `src/bindings.rs` is what they generate).
+3. **test** runs the CI workflow on that commit ([Tests and CI](#tests-and-ci)): the build and the
+   tests on Linux, Windows and macOS, and the checks on Linux, among them that `binaryen/` is
+   exactly the release's sources, that `src/bindings.rs` is what they generate, and that it covers
+   the C API exactly ([The C API check](#the-c-api-check)).
 4. **release** fast-forwards `main` to the commit and tags it `v<N>.0.0`, in one atomic push,
    then deletes `update-binaryen`.
 
 Only **push** and **release** hold a token that may write to the repository, each in the step
 that pushes, with no credential on disk before it; neither runs third-party code.
 
-If any step fails, `main` and the tags stay as they were, and the next run tries again. A release
-that changes the C API in a way the bindings can't express, or that breaks the build, needs a
-person: [CONTRIBUTING.md](CONTRIBUTING.md#finishing-an-update-by-hand) says how.
+If any step fails, `main` and the tags stay as they were, and the next run tries again. A failure
+of **test** means the release needs a change of the crate: a function, type or constant the
+bindings don't cover, a test or a build that breaks, a hand-written part that no longer matches.
+Nothing is tagged until a person makes that change:
+[CONTRIBUTING.md](CONTRIBUTING.md#finishing-an-update-by-hand) says how, and how to fix each failure
+of the checks.
+
+### The C API check
+
+`scripts/check-c-api.sh` compares three independent listings of the C API: what clang's syntax
+tree of `binaryen-c.h` declares (its top-level declarations, enumerators and macros, minus those
+of the C headers it includes), what `src/bindings.rs` binds, and what the static library the build
+script builds defines (`nm`). It fails, listing the names, when:
+
+- an item the header declares isn't bound, unless `scripts/c-api-unbound.txt` names it with the
+  reason (which also keeps bindgen from binding it);
+- the bindings have an item the header doesn't declare, or a function the library doesn't define,
+  which no call could link;
+- `scripts/c-api-unbound.txt` names an item that is bound, isn't declared any more, or is a
+  function the library defines;
+- the header includes a Binaryen file other than `wasm-delegations.def`, whose items the bindings'
+  allowlist would leave out;
+- bindgen bound a type as an opaque blob, a layout it couldn't express;
+- a function returning a buffer to free (`*AllocateAndWrite*`) isn't named in the documentation
+  of the crate's `free`.
+
+Together with the build, the tests, the documentation's example and its links, and the lints
+(which fail on a lint expectation the bindings no longer need, or on one they now need), it makes
+CI fail whenever a release changes the C API in a way the crate's hand-written parts don't cover.
+Binaryen's `version_133` declares four functions its library doesn't define
+(`BinaryenStringIterMove`, `BinaryenStringIterNext`, `BinaryenStringSliceIter` and
+`BinaryenStringWTF8Advance`), which `scripts/c-api-unbound.txt` lists.
 
 ### Keeping the schedule alive
 
@@ -145,9 +178,12 @@ diffutils, find, grep and sed (as on Linux):
 - `scripts/regenerate-bindings.sh` regenerates `src/bindings.rs` from the vendored Binaryen with
   bindgen-cli 0.73.2 (`cargo install bindgen-cli --version 0.73.2 --locked`), which needs libclang
   (on Ubuntu, `libclang-dev`). Every item of `binaryen-c.h` is bound, with the expression ids it
-  declares through `wasm-delegations.def`, and nothing from the C headers it includes.
+  declares through `wasm-delegations.def`, but those `scripts/c-api-unbound.txt` names, and
+  nothing from the C headers it includes.
 - `scripts/update-binaryen.sh [version_<N>]` does what the workflow's `prepare` does, without
   committing: to the latest release, or to the one named.
+- `scripts/check-c-api.sh` runs [the C API check](#the-c-api-check); it also needs clang, jq and
+  GNU nm.
 
 [CONTRIBUTING.md](CONTRIBUTING.md) says how to check a change before a pull request, and how to
 finish an update by hand.
@@ -162,9 +198,10 @@ documentation's example.
 
 `.github/workflows/ci.yml` runs on pushes to `main` and on pull requests: `cargo test` on Linux,
 Windows and macOS, and on Linux the checks that `binaryen/` is exactly the recorded release's
-sources (`scripts/vendor-binaryen.sh --check`) and that `src/bindings.rs` is what
-`scripts/regenerate-bindings.sh` generates, `cargo fmt --check`, Clippy (warnings fail) and the
-API docs (warnings fail). Its actions are pinned to commit SHAs, with the release in a comment.
+sources (`scripts/vendor-binaryen.sh --check`), that `src/bindings.rs` is what
+`scripts/regenerate-bindings.sh` generates, `cargo fmt --check`, Clippy (warnings fail), the API
+docs (warnings fail) and [the C API check](#the-c-api-check). Its actions are pinned to commit
+SHAs, with the release in a comment.
 
 ## Origin and licence
 

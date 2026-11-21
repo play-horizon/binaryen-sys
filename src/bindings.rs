@@ -1351,37 +1351,16 @@ unsafe extern "C-unwind" {
         left: BinaryenExpressionRef,
         right: BinaryenExpressionRef,
     ) -> BinaryenExpressionRef;
-    pub fn BinaryenStringWTF8Advance(
-        module: BinaryenModuleRef,
-        ref_: BinaryenExpressionRef,
-        pos: BinaryenExpressionRef,
-        bytes: BinaryenExpressionRef,
-    ) -> BinaryenExpressionRef;
     pub fn BinaryenStringWTF16Get(
         module: BinaryenModuleRef,
         ref_: BinaryenExpressionRef,
         pos: BinaryenExpressionRef,
-    ) -> BinaryenExpressionRef;
-    pub fn BinaryenStringIterNext(
-        module: BinaryenModuleRef,
-        ref_: BinaryenExpressionRef,
-    ) -> BinaryenExpressionRef;
-    pub fn BinaryenStringIterMove(
-        module: BinaryenModuleRef,
-        op: BinaryenOp,
-        ref_: BinaryenExpressionRef,
-        num: BinaryenExpressionRef,
     ) -> BinaryenExpressionRef;
     pub fn BinaryenStringSliceWTF(
         module: BinaryenModuleRef,
         ref_: BinaryenExpressionRef,
         start: BinaryenExpressionRef,
         end: BinaryenExpressionRef,
-    ) -> BinaryenExpressionRef;
-    pub fn BinaryenStringSliceIter(
-        module: BinaryenModuleRef,
-        ref_: BinaryenExpressionRef,
-        num: BinaryenExpressionRef,
     ) -> BinaryenExpressionRef;
     pub fn BinaryenExpressionGetId(expr: BinaryenExpressionRef) -> BinaryenExpressionId;
     pub fn BinaryenExpressionGetType(expr: BinaryenExpressionRef) -> BinaryenType;

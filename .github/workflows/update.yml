@@ -4,7 +4,8 @@
 # regenerated bindings; `push` writes the update itself from them (the release's sources vendored
 # by scripts/vendor-binaryen.sh, the bindings, the version `<N>.0.0`) and pushes it as a commit to
 # the branch `update-binaryen`, never over a person's commits there; `test` runs CI on that
-# commit, on the three OSes; and `release` fast-forwards main to it, tags it `v<N>.0.0` and
+# commit, on the three OSes, which fails when the release needs a change of the crate (among its
+# checks, scripts/check-c-api.sh); and `release` fast-forwards main to it, tags it `v<N>.0.0` and
 # deletes the branch. A failure anywhere leaves main as it was. Only the steps that push hold a
 # token that may write to the repository, and their jobs run no third-party code. On every run,
 # `keepalive` re-enables this workflow through the API (its token may only manage Actions), to keep

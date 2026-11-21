@@ -1,8 +1,9 @@
 # Builds Binaryen and runs the tests on Linux, Windows and macOS; on Linux, also checks that
 # binaryen/ is exactly upstream's sources at the release binaryen-release names, that
-# src/bindings.rs is exactly what scripts/regenerate-bindings.sh generates from them, the
-# formatting, Clippy and the API docs. Runs on pushes to main and on pull requests, and is called
-# by the update workflow on the commit it prepared (`ref`).
+# src/bindings.rs is exactly what scripts/regenerate-bindings.sh generates from them and covers
+# the C API exactly (scripts/check-c-api.sh), the formatting, Clippy and the API docs. Runs on
+# pushes to main and on pull requests, and is called by the update workflow on the commit it
+# prepared (`ref`).
 name: CI
 
 on:
@@ -66,3 +67,5 @@ jobs:
       - run: cargo clippy --locked --all-targets -- --deny warnings
 
       - run: cargo doc --locked --no-deps
+
+      - run: scripts/check-c-api.sh
