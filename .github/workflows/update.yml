@@ -8,8 +8,8 @@
 # checks, scripts/check-c-api.sh); and `release` fast-forwards main to it, tags it `v<N>.0.0` and
 # deletes the branch. A failure anywhere leaves main as it was. Only the steps that push hold a
 # token that may write to the repository, and their jobs run no third-party code. On every run,
-# `keepalive` re-enables this workflow through the API (its token may only manage Actions), to keep
-# GitHub from pausing its schedule for inactivity (README.md).
+# `keepalive` re-enables the scheduled workflows through the API (its token may only manage
+# Actions), to keep GitHub from pausing their schedules for inactivity (README.md).
 name: Update Binaryen
 
 on:
@@ -30,10 +30,11 @@ defaults:
     shell: bash
 
 jobs:
-  # Re-enables this workflow, which it is already, through the REST API: GitHub disables a public
-  # repository's scheduled workflows after 60 days without activity in the repository, and this
-  # is the commit-free way to keep the schedule going that projects report working; GitHub doesn't
-  # document which activity resets the 60 days (README.md). Its token may only manage Actions.
+  # Re-enables the scheduled workflows (this one and the dependency checks), which they are
+  # already, through the REST API: GitHub disables a public repository's scheduled workflows after
+  # 60 days without activity in the repository, and this is the commit-free way to keep the
+  # schedules going that projects report working; GitHub doesn't document which activity resets
+  # the 60 days (README.md). Its token may only manage Actions.
   keepalive:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -42,7 +43,10 @@ jobs:
     steps:
       - env:
           GH_TOKEN: ${{ github.token }}
-        run: gh api --method PUT "repos/$GITHUB_REPOSITORY/actions/workflows/update.yml/enable"
+        run: |
+          for workflow in update.yml dependencies.yml; do
+            gh api --method PUT "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow/enable"
+          done
 
   # Builds and runs third-party code (bindgen-cli and its dependencies), so it can't write: its
   # result goes to `push` as outputs.

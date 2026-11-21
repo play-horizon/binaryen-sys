@@ -1,9 +1,9 @@
 # Builds Binaryen and runs the tests on Linux, Windows and macOS; on Linux, also checks that
 # binaryen/ is exactly upstream's sources at the release binaryen-release names, that
 # src/bindings.rs is exactly what scripts/regenerate-bindings.sh generates from them and covers
-# the C API exactly (scripts/check-c-api.sh), the formatting, Clippy and the API docs. Runs on
-# pushes to main and on pull requests, and is called by the update workflow on the commit it
-# prepared (`ref`).
+# the C API exactly (scripts/check-c-api.sh), the formatting, Clippy and the API docs; and checks
+# the dependencies with cargo-deny (deny.toml). Runs on pushes to main and on pull requests, and
+# is called by the update workflow on the commit it prepared (`ref`).
 name: CI
 
 on:
@@ -69,3 +69,18 @@ jobs:
       - run: cargo doc --locked --no-deps
 
       - run: scripts/check-c-api.sh
+
+  # Vulnerabilities, licences, banned crates and sources of the dependencies (deny.toml), with
+  # cargo-deny at a fixed version whose own dependencies Cargo checks against its Cargo.lock.
+  dependencies:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+
+      - run: cargo install cargo-deny --version 0.22.0 --locked
+
+      - run: cargo deny --locked check

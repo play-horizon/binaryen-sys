@@ -11,15 +11,16 @@ and workflows ([README.md](README.md)). Most of it is never edited by hand:
 
 The hand-written parts are `src/lib.rs` (the crate's documentation, the lint expectations on the
 bindings, the declaration of `free`), `build.rs`, the tests in `tests/`, the scripts, the
-workflows, `scripts/c-api-unbound.txt` and the documentation.
+workflows, `deny.toml`, `scripts/c-api-unbound.txt` and the documentation.
 
 ## Setting up
 
 - Rust: `rust-toolchain.toml` pins the toolchain, which rustup installs by itself.
 - CMake 3.16.3 or later and a C++20 compiler, to build Binaryen.
-- For the scripts (Linux): bash, git, GNU coreutils, diffutils, find, grep, sed and nm, jq, and
-  clang with libclang (on Ubuntu, `clang` and `libclang-dev`).
+- For the scripts (Linux): bash, git, GNU coreutils, diffutils, find, grep, sed and nm, curl, jq,
+  and clang with libclang (on Ubuntu, `clang` and `libclang-dev`).
 - bindgen-cli 0.73.2: `cargo install bindgen-cli --version 0.73.2 --locked`.
+- cargo-deny 0.22.0: `cargo install cargo-deny --version 0.22.0 --locked`.
 
 ## Checking a change
 
@@ -34,6 +35,7 @@ RUSTDOCFLAGS='-D warnings' cargo doc --locked --no-deps
 scripts/vendor-binaryen.sh --check
 scripts/regenerate-bindings.sh && git diff --exit-code src/bindings.rs
 scripts/check-c-api.sh
+cargo deny --locked check
 ```
 
 Commit subjects are `TYPE: summary`, under 50 characters, with one of the types `FEAT`, `FIX`,
@@ -104,6 +106,7 @@ What to do for each failure:
   moved, find out why before going on.
 - **The bindings differ from what the script generates**: someone edited `src/bindings.rs`, or a
   change of the script wasn't followed by a regeneration. Regenerate.
+- **cargo-deny fails** ([Dependencies](#dependencies)).
 
 ### Finishing an update by hand
 
@@ -121,3 +124,12 @@ What to do for each failure:
 
 The crate has one dependency, the `cmake` build dependency. A new one is a decision for the
 maintainers, with its reason in the pull request.
+
+- **cargo-deny fails on an advisory**: update the affected crate (`cargo update --package
+  <crate>`), or the dependency that pulls it in. An advisory with no fixed version is a decision
+  for the maintainers, recorded in `deny.toml`'s `ignore` with the reason.
+- **cargo-deny fails on a licence**: a dependency (or a new version of one) has a licence that
+  isn't on `deny.toml`'s allow-list. The maintainers decide whether to accept it: an exception
+  that names the crate, with the reason, or another dependency.
+- **The outdated check fails** (`scripts/check-outdated.sh`): raise the requirement in
+  `Cargo.toml` to the latest release, run `cargo update`, and check the change like any other.

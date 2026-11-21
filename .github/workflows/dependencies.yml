@@ -1,0 +1,43 @@
+# Checks the crate's dependencies every day, and when run by hand, so that a problem found after
+# the last push shows up: `deny` runs cargo-deny (deny.toml: vulnerabilities, licences, banned
+# crates, sources), as CI does on every push, and fails on a newly published advisory too;
+# `outdated` fails when a direct dependency has a newer release than the one Cargo.lock holds
+# (scripts/check-outdated.sh), listing them in the job summary. The update workflow's keepalive
+# keeps the schedule from being paused (README.md).
+name: Dependencies
+
+on:
+  schedule:
+    - cron: '41 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  deny:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # cargo-deny at a fixed version whose own dependencies Cargo checks against its Cargo.lock.
+      - run: cargo install cargo-deny --version 0.22.0 --locked
+
+      - run: cargo deny --locked check
+
+  outdated:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - run: scripts/check-outdated.sh

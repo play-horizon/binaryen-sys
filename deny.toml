@@ -1,0 +1,30 @@
+# cargo-deny's configuration (https://embarkstudios.github.io/cargo-deny/), which CI checks on
+# every push and pull request, and the dependency workflow every day (README.md, "Dependencies").
+
+# Every advisory of the RustSec database on a crate of Cargo.lock fails: a vulnerability, an
+# unmaintained or unsound crate, a yanked version. `ignore` lists none.
+[advisories]
+yanked = "deny"
+ignore = []
+
+# The licences the dependencies may have, all permissive. The crate itself also carries the
+# licences of the Binaryen code it vendors and links in: LLVM's (Apache 2.0 with LLVM
+# exceptions), the NCSA licence of LLVM's system interface code and Unicode's for its UTF
+# conversions (README.md, "Origin and licence").
+[licenses]
+allow = ["Apache-2.0", "MIT"]
+confidence-threshold = 0.93
+exceptions = [
+    { crate = "binaryen-sys-next", allow = ["Apache-2.0 WITH LLVM-exception", "NCSA", "Unicode-DFS-2015"] },
+]
+
+# Several versions of one crate are reported, not refused; a wildcard requirement is refused.
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+
+# Crates come from crates.io only.
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

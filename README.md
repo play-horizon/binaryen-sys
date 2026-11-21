@@ -145,16 +145,17 @@ Binaryen's `version_133` declares four functions its library doesn't define
 (`BinaryenStringIterMove`, `BinaryenStringIterNext`, `BinaryenStringSliceIter` and
 `BinaryenStringWTF8Advance`), which `scripts/c-api-unbound.txt` lists.
 
-### Keeping the schedule alive
+### Keeping the schedules alive
 
 GitHub disables the scheduled workflows of a public repository "when no repository activity has
 occurred in 60 days"
 ([Events that trigger workflows](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule)),
-and Binaryen releases come about every month or two, so a quiet stretch would pause the updates.
-The workflow makes no commit to prevent it: on every run, scheduled or by hand, its **keepalive**
-job re-enables the workflow through the REST API
+and Binaryen releases come about every month or two, so a quiet stretch would pause the updates
+and the dependency checks. The workflows make no commit to prevent it: on every run, scheduled or
+by hand, the update workflow's **keepalive** job re-enables both scheduled workflows
+(`update.yml` and `dependencies.yml`) through the REST API
 ([Enable a workflow](https://docs.github.com/en/rest/actions/workflows#enable-a-workflow),
-`PUT /repos/{owner}/{repo}/actions/workflows/update.yml/enable`), with a token that may only
+`PUT /repos/{owner}/{repo}/actions/workflows/{workflow}/enable`), with a token that may only
 manage Actions (`actions: write`, nothing else). It runs beside the update, so a failed update
 doesn't stop it.
 
@@ -166,6 +167,17 @@ disabled workflow can't run its keepalive: re-enable it from the Actions tab, or
 `gh workflow enable update.yml`, and run it once (`gh workflow run update.yml`) to catch up.
 
 Moving a project that depends on the crate to the new release is a change of tag in that project.
+
+## Dependencies
+
+`deny.toml` configures [cargo-deny](https://github.com/EmbarkStudios/cargo-deny), which CI runs
+on every push and pull request, and `.github/workflows/dependencies.yml` every day at 04:41 UTC
+(so that an advisory published since the last push shows up): it fails on any crate of
+`Cargo.lock` with a known vulnerability (the RustSec advisory database), on a licence that isn't
+on its allow-list, and on a crate from anywhere but crates.io. The same daily workflow runs
+`scripts/check-outdated.sh`, which fails when a direct dependency (normal, build or development)
+has a newer release on crates.io than the version `Cargo.lock` holds, and lists them in the job
+summary.
 
 ## By hand
 
@@ -184,6 +196,7 @@ diffutils, find, grep and sed (as on Linux):
   committing: to the latest release, or to the one named.
 - `scripts/check-c-api.sh` runs [the C API check](#the-c-api-check); it also needs clang, jq and
   GNU nm.
+- `scripts/check-outdated.sh` lists the outdated direct dependencies; it also needs curl and jq.
 
 [CONTRIBUTING.md](CONTRIBUTING.md) says how to check a change before a pull request, and how to
 finish an update by hand.
@@ -197,11 +210,12 @@ finish an update by hand.
 documentation's example.
 
 `.github/workflows/ci.yml` runs on pushes to `main` and on pull requests: `cargo test` on Linux,
-Windows and macOS, and on Linux the checks that `binaryen/` is exactly the recorded release's
+Windows and macOS; on Linux the checks that `binaryen/` is exactly the recorded release's
 sources (`scripts/vendor-binaryen.sh --check`), that `src/bindings.rs` is what
 `scripts/regenerate-bindings.sh` generates, `cargo fmt --check`, Clippy (warnings fail), the API
-docs (warnings fail) and [the C API check](#the-c-api-check). Its actions are pinned to commit
-SHAs, with the release in a comment.
+docs (warnings fail) and [the C API check](#the-c-api-check); and `cargo deny check`
+([Dependencies](#dependencies)). Its actions are pinned to commit SHAs, with the release in a
+comment, and the tools it installs to exact versions.
 
 ## Origin and licence
 
