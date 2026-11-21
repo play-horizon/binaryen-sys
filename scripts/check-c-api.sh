@@ -13,16 +13,24 @@
 #   a function the library defines (a function is left out only when calling it couldn't link);
 # - bindgen bound a type as an opaque blob (a layout it couldn't express);
 # - a function returning a buffer to free (`*AllocateAndWrite*`) isn't named in the documentation
-#   of the crate's `free` (src/lib.rs).
+#   of the crate's `free` (src/lib.rs);
+# - an item of the previous Binaryen release's bindings is gone, or changed, unless
+#   scripts/c-api-changes.txt lists it for this release (a maintainer reviewed it), or that file
+#   lists, for this release, an item that isn't such a change, or holds a line it can't read.
 #
 # The declarations come from clang's syntax tree of binaryen-c.h, independently of bindgen: its
 # top-level ones, minus those of the C headers it includes (a file of those includes alone, parsed
 # the same way). The library's functions come from `nm` on the static library the build script
-# builds. CI runs it after regenerating the bindings, so the update workflow runs it on every new
-# Binaryen release.
+# builds. The previous release's bindings come from the git history: src/bindings.rs at the newest
+# commit, going back from HEAD along the first parents, whose binaryen-release names another
+# release (none when the walk reaches a commit with no binaryen-release first), compared item by
+# item with the current ones (scripts/rust-items.awk), so what bindgen computes counts (layouts,
+# enumerator values, bit-field widths, the ABI) and what doesn't change the API doesn't (parameter
+# names, documentation). CI runs it after regenerating the bindings, so the update workflow runs it
+# on every new Binaryen release.
 #
-# It needs clang (or the one $CLANG names), jq, GNU nm and the coreutils, on Linux, and runs the
-# crate's build script (`cargo check`).
+# It needs clang (or the one $CLANG names), jq, GNU nm, GNU awk (gawk), git with the repository's
+# whole history, and the coreutils, on Linux, and runs the crate's build script (`cargo check`).
 #
 # Usage: scripts/check-c-api.sh
 set -euo pipefail
@@ -30,16 +38,21 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 clang="${CLANG:-clang}"
-for tool in "$clang" jq nm cargo; do
+for tool in "$clang" jq nm gawk git cargo; do
 	if ! command -v "$tool" >/dev/null; then
 		echo "$tool is needed and wasn't found" >&2
 		exit 1
 	fi
 done
+if [[ "$(git rev-parse --is-shallow-repository)" == true ]]; then
+	echo "the C API check needs the repository's whole history (git fetch --unshallow)" >&2
+	exit 1
+fi
 
 header=binaryen/src/binaryen-c.h
 bindings=src/bindings.rs
 unbound_list=scripts/c-api-unbound.txt
+changes_list=scripts/c-api-changes.txt
 # The Binaryen files the bindings take items from besides binaryen-c.h, as the allowlist of
 # scripts/regenerate-bindings.sh names them.
 allowlisted_includes=(binaryen/src/wasm-delegations.def)
@@ -73,7 +86,10 @@ report() {
 }
 
 # The files binaryen-c.h includes: `-H` prints each one, after one dot per level of nesting.
-"$clang" "${clang_flags[@]}" -fsyntax-only -H "$header" 2>"$work/includes"
+if ! "$clang" "${clang_flags[@]}" -fsyntax-only -H "$header" 2>"$work/includes"; then
+	cat "$work/includes" >&2
+	exit 1
+fi
 binaryen_root="$(realpath binaryen)"
 sed --quiet 's/^\.\+ //p' "$work/includes" | xargs --no-run-if-empty realpath >"$work/included-paths"
 filter --fixed-strings "$binaryen_root/" "$work/included-paths" | sed "s|^$binaryen_root/|binaryen/|" |
@@ -163,6 +179,83 @@ filter 'AllocateAndWrite' "$work/rust-functions" | while read -r name; do
 done >"$work/undocumented-buffers"
 report "Functions returning a buffer to free that the documentation of \`free\` (src/lib.rs) doesn't name" \
 	"$work/undocumented-buffers"
+
+# The previous release's bindings: those of the newest commit, going back from HEAD along the
+# first parents, whose binaryen-release names another release; none when the history reaches a
+# commit with no binaryen-release first.
+release="$(sed --quiet 's/^tag //p' binaryen-release)"
+git rev-list --first-parent HEAD >"$work/history"
+previous_commit=""
+previous_release=""
+while read -r commit; do
+	listed="$(git ls-tree --name-only "$commit" -- binaryen-release)"
+	if [[ -z "$listed" ]]; then
+		break
+	fi
+	git show "$commit:binaryen-release" >"$work/release-file"
+	tag="$(sed --quiet 's/^tag //p' "$work/release-file")"
+	if [[ "$tag" != "$release" ]]; then
+		previous_commit="$commit"
+		previous_release="$tag"
+		break
+	fi
+done <"$work/history"
+
+# The reviewed changes: one `release version_<N>` line, then `removed <name> <what was checked>`
+# or `changed <name> <what was checked>` lines, one per name; those of another release don't
+# count.
+filter --invert-match '^[[:space:]]*\(#\|$\)' "$changes_list" >"$work/changes-lines"
+gawk '
+	$1 == "release" && NF == 2 && $2 ~ /^version_[0-9]+$/ && !seen_release {seen_release = 1; next}
+	seen_release && ($1 == "removed" || $1 == "changed") && NF >= 3 && !($2 in names) {names[$2]; next}
+	{print}' "$work/changes-lines" >"$work/malformed-changes"
+report "Lines of scripts/c-api-changes.txt it can't read (one \`release version_<N>\` line, then one \`removed\` or \`changed\` line per name, with what was checked)" \
+	"$work/malformed-changes"
+if [[ "$(gawk '$1 == "release" {print $2; exit}' "$work/changes-lines")" == "$release" ]]; then
+	gawk '$1 == "removed" || $1 == "changed" {print $1, $2}' "$work/changes-lines" | LC_ALL=C sort --unique >"$work/reviewed"
+else
+	: >"$work/reviewed"
+fi
+
+# One line per change: `removed <name>` or `changed <name>`, a tab, then the old text and, for a
+# change, the new one. A bindings file scripts/rust-items.awk can't read is reported instead.
+: >"$work/changes"
+: >"$work/unreadable"
+if [[ -z "$previous_commit" ]]; then
+	echo "No earlier Binaryen release in the history: no bindings to compare with."
+else
+	git show "$previous_commit:$bindings" >"$work/previous-bindings.rs"
+	if ! gawk --assign=source="$previous_commit:$bindings ($previous_release)" --file=scripts/rust-items.awk \
+		"$work/previous-bindings.rs" >"$work/previous-items" 2>"$work/parse-error"; then
+		cat "$work/parse-error" >>"$work/unreadable"
+	fi
+	if ! gawk --file=scripts/rust-items.awk "$bindings" >"$work/current-items" 2>"$work/parse-error"; then
+		cat "$work/parse-error" >>"$work/unreadable"
+	fi
+	if [[ ! -s "$work/unreadable" ]]; then
+		gawk --field-separator='\t' '
+			FILENAME == ARGV[1] {current[$1] = $2; next}
+			!($1 in current) {print "removed " $1 "\t" $2; next}
+			current[$1] != $2 {print "changed " $1 "\t" $2 "  ->  " current[$1]}' \
+			"$work/current-items" "$work/previous-items" | LC_ALL=C sort >"$work/changes"
+	fi
+fi
+report "Bindings scripts/rust-items.awk can't read, so the C API changes aren't known" "$work/unreadable"
+while IFS=$'\t' read -r change detail; do
+	if ! grep --quiet --fixed-strings --line-regexp "$change" "$work/reviewed"; then
+		printf '%s\n    %s\n' "$change" "$detail"
+	fi
+done <"$work/changes" >"$work/unreviewed"
+report "Items of the bindings of ${previous_release:-the previous release} removed or changed in $release that scripts/c-api-changes.txt doesn't list for $release" \
+	"$work/unreviewed"
+cut --fields=1 "$work/changes" | LC_ALL=C sort --unique >"$work/changed-names"
+if [[ -s "$work/unreadable" ]]; then
+	: >"$work/stale-changes"
+else
+	lines_not_in "$work/reviewed" "$work/changed-names" >"$work/stale-changes"
+fi
+report "In scripts/c-api-changes.txt for $release, but not an item of the bindings removed or changed in $release" \
+	"$work/stale-changes"
 
 # The library the build script builds, found through Cargo's report of the build script's run
 # (`cargo check` runs it, as a build does, and prints the compiler's messages).

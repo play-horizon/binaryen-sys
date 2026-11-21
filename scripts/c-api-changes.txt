@@ -1,0 +1,8 @@
+# The items of the bindings that a Binaryen release removed or changed, as a maintainer reviewed
+# them, for the release the `release` line names. scripts/check-c-api.sh fails on every item of
+# the previous release's bindings that is gone or changed, unless this file lists it for the
+# release binaryen-release names, and on an entry that isn't such a change; entries for another
+# release don't count. After the `release version_<N>` line, one entry per item: `removed` or
+# `changed`, the item's name, then what the maintainer checked (CONTRIBUTING.md, "When the C API
+# loses or changes an item").
+release version_133

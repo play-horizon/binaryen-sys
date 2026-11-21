@@ -11,14 +11,15 @@ and workflows ([README.md](README.md)). Most of it is never edited by hand:
 
 The hand-written parts are `src/lib.rs` (the crate's documentation, the lint expectations on the
 bindings, the declaration of `free`), `build.rs`, the tests in `tests/`, the scripts, the
-workflows, `deny.toml`, `scripts/c-api-unbound.txt` and the documentation.
+workflows, `deny.toml`, `scripts/c-api-unbound.txt`, `scripts/c-api-changes.txt` and the
+documentation.
 
 ## Setting up
 
 - Rust: `rust-toolchain.toml` pins the toolchain, which rustup installs by itself.
 - CMake 3.16.3 or later and a C++20 compiler, to build Binaryen.
-- For the scripts (Linux): bash, git, GNU coreutils, diffutils, find, grep, sed and nm, curl, jq,
-  and clang with libclang (on Ubuntu, `clang` and `libclang-dev`).
+- For the scripts (Linux): bash, git, GNU coreutils, diffutils, find, grep, sed, awk (gawk) and
+  nm, curl, jq, and clang with libclang (on Ubuntu, `clang` and `libclang-dev`).
 - bindgen-cli 0.73.2: `cargo install bindgen-cli --version 0.73.2 --locked`.
 - cargo-deny 0.22.0: `cargo install cargo-deny --version 0.22.0 --locked`.
 
@@ -105,6 +106,18 @@ What to do for each failure:
     or an option of `scripts/regenerate-bindings.sh` may express it.
   - *Functions returning a buffer to free that the documentation of `free` doesn't name*: add
     the function to the documentation of `free` in `src/lib.rs`.
+  - *Items of the bindings of version_<M> removed or changed in version_<N> that
+    scripts/c-api-changes.txt doesn't list for version_<N>*: the release removed or changed items
+    of the C API ([When the C API loses or changes an item](#when-the-c-api-loses-or-changes-an-item)).
+  - *In scripts/c-api-changes.txt for version_<N>, but not an item of the bindings removed or
+    changed in version_<N>*: remove the entry.
+  - *Bindings scripts/rust-items.awk can't read, so the C API changes aren't known*: the
+    bindings (the current ones, or the previous release's, named with their commit) hold a
+    construct of bindgen's output that `scripts/rust-items.awk` doesn't know yet, at the line it
+    names. Teach it the construct: its item's name and what of it is part of the API.
+  - *Lines of scripts/c-api-changes.txt it can't read*: write the file as its header says: one
+    `release version_<N>` line, then one `removed` or `changed` line per item, with what you
+    checked.
   - *Declarations of a kind this check doesn't know*: the header declares a named item of a kind
     the check doesn't map to the bindings yet (it maps functions, typedefs, structs and unions,
     enums and their enumerators, variables and macros; declarations without a name, such as a
@@ -116,6 +129,24 @@ What to do for each failure:
 - **The bindings differ from what the script generates**: someone edited `src/bindings.rs`, or a
   change of the script wasn't followed by a regeneration. Regenerate.
 - **cargo-deny fails** ([Dependencies](#dependencies)).
+
+### When the C API loses or changes an item
+
+The C API check lists each item of the previous release's bindings that is gone or changed, with
+its old and its new text. Every one of them can break a crate that uses it, so a person reviews
+them before the version is published (a change of bindgen-cli's version can change items too,
+and is reviewed the same way):
+
+1. Read Binaryen's changelog and the change in `binaryen-c.h` for each item: what replaces a
+   removed function, what a changed signature means for a caller.
+2. Check the crate's hand-written parts against it: `src/lib.rs` (the documentation and `free`),
+   `tests/`, `scripts/c-api-unbound.txt` (an entry for a removed item goes too).
+3. In `scripts/c-api-changes.txt`, set the `release` line to the new release's tag and replace
+   the entries with one per item: `removed` or `changed`, its name, and what you checked (what
+   replaces it, or that the crate doesn't call it). Entries for an earlier release don't count, so
+   the file always describes the last release that removed or changed something.
+4. Finish the update as below; the version stays `<N>.0.0`, since the major version already says
+   the C API may have changed.
 
 ### Finishing an update by hand
 

@@ -50,10 +50,15 @@ jobs:
     env:
       RUSTDOCFLAGS: -D warnings
     steps:
+      # The whole history: the C API check compares the bindings with the previous release's.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.ref }}
+          fetch-depth: 0
           persist-credentials: false
+
+      # GNU awk, which the C API check needs, installed so that it doesn't depend on the image.
+      - run: sudo apt-get update --quiet && sudo apt-get install --yes --no-install-recommends gawk
 
       - run: scripts/vendor-binaryen.sh --check
 

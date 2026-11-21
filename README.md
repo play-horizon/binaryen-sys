@@ -146,17 +146,21 @@ that tag is still going, and fails, so that a person hears of it (a release that
 every update run until a person fixes it, as
 [CONTRIBUTING.md](CONTRIBUTING.md#when-publishing-fails) says; `gh workflow run release.yml --ref
 v<version>` starts one by hand). A failure of **test** means the release needs a change of the
-crate: a function, type or constant the bindings don't cover, a test or a build that breaks, a
-hand-written part that no longer matches. Nothing is published until a person makes that change:
+crate: a function, type or constant the bindings don't cover, an item of the C API removed or
+changed, which a person reviews, a test or a build that breaks, a hand-written part that no longer
+matches. Nothing is published until a person makes that change:
 [CONTRIBUTING.md](CONTRIBUTING.md#finishing-an-update-by-hand) says how, and how to fix each failure
 of the checks.
 
 ### The C API check
 
-`scripts/check-c-api.sh` compares three independent listings of the C API: what clang's syntax
-tree of `binaryen-c.h` declares (its top-level declarations, enumerators and macros, minus those
-of the C headers it includes), what `src/bindings.rs` binds, and what the static library the build
-script builds defines (`nm`). It fails, listing the names, when:
+`scripts/check-c-api.sh` compares independent listings of the C API: what clang's syntax tree of
+`binaryen-c.h` declares (its top-level declarations, enumerators and macros, minus those of the C
+headers it includes), what `src/bindings.rs` binds, what the previous Binaryen release's
+`src/bindings.rs` bound (from the git history: the newest commit, going back from `HEAD` along the
+first parents, whose `binaryen-release` names another release; none when the walk reaches a commit
+with no `binaryen-release` first), and what the static library the build script builds defines
+(`nm`). It fails, listing the names, when:
 
 - an item the header declares isn't bound, unless `scripts/c-api-unbound.txt` names it with the
   reason (which also keeps bindgen from binding it);
@@ -168,13 +172,20 @@ script builds defines (`nm`). It fails, listing the names, when:
   allowlist would leave out;
 - bindgen bound a type as an opaque blob, a layout it couldn't express;
 - a function returning a buffer to free (`*AllocateAndWrite*`) isn't named in the documentation
-  of the crate's `free`.
+  of the crate's `free`;
+- an item of the previous release's bindings is gone, or changed: a function's signature, a
+  type, a struct's or union's fields and layout (`repr` attributes, bit-field widths), a
+  constant's value. `scripts/rust-items.awk` reads each item of both bindings, leaving out what
+  doesn't change the API (parameter names, documentation, rustfmt's line breaks). The check
+  passes only when `scripts/c-api-changes.txt` lists every such item for this release, which a
+  maintainer does after reviewing it, and lists nothing else.
 
-Together with the build, the tests, the documentation's example and its links, and the lints
-(which fail on a lint expectation the bindings no longer need, or on one they now need), it makes
-CI fail whenever a release changes the C API in a way the crate's hand-written parts don't cover.
-Binaryen's `version_133` declares four functions its library doesn't define
-(`BinaryenStringIterMove`, `BinaryenStringIterNext`, `BinaryenStringSliceIter` and
+So a release that only adds to the C API updates the crate by itself, and one that removes or
+changes anything waits for a person. Together with the build, the tests, the documentation's example
+and its links, and the lints (which fail on a lint expectation the bindings no longer need, or on
+one they now need), it makes CI fail whenever a release changes the C API in a way the crate's
+hand-written parts don't cover. Binaryen's `version_133` declares four functions its library doesn't
+define (`BinaryenStringIterMove`, `BinaryenStringIterNext`, `BinaryenStringSliceIter` and
 `BinaryenStringWTF8Advance`), which `scripts/c-api-unbound.txt` lists.
 
 ### Keeping the schedules alive
@@ -224,8 +235,8 @@ diffutils, find, grep and sed (as on Linux):
   nothing from the C headers it includes.
 - `scripts/update-binaryen.sh [version_<N>]` does what the workflow's `prepare` does, without
   committing: to the latest release, or to the one named.
-- `scripts/check-c-api.sh` runs [the C API check](#the-c-api-check); it also needs clang, jq and
-  GNU nm.
+- `scripts/check-c-api.sh` runs [the C API check](#the-c-api-check); it also needs clang, jq, GNU
+  awk (gawk), GNU nm and the repository's whole history.
 - `scripts/check-outdated.sh` lists the outdated direct dependencies; it also needs curl and jq.
 
 [CONTRIBUTING.md](CONTRIBUTING.md) says how to check a change before a pull request, and how to
