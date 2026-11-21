@@ -110,10 +110,7 @@ that pushes, with no credential on disk before it; neither runs third-party code
 
 If any step fails, `main` and the tags stay as they were, and the next run tries again. A release
 that changes the C API in a way the bindings can't express, or that breaks the build, needs a
-person: push the fix as a commit on `update-binaryen` (from then on the workflow leaves the
-branch alone and its runs fail, which shows the update is in a person's hands), check it with CI
-(run on a pull request from the branch), push it to `main` with the version and the tag the
-workflow would have given it, and delete the branch.
+person: [CONTRIBUTING.md](CONTRIBUTING.md#finishing-an-update-by-hand) says how.
 
 ### Keeping the schedule alive
 
@@ -150,8 +147,10 @@ diffutils, find, grep and sed (as on Linux):
   (on Ubuntu, `libclang-dev`). Every item of `binaryen-c.h` is bound, with the expression ids it
   declares through `wasm-delegations.def`, and nothing from the C headers it includes.
 - `scripts/update-binaryen.sh [version_<N>]` does what the workflow's `prepare` does, without
-  committing: to the latest release, or to the one named. Then build and test (`cargo test`),
-  commit, and tag the commit `v<N>.0.0`.
+  committing: to the latest release, or to the one named.
+
+[CONTRIBUTING.md](CONTRIBUTING.md) says how to check a change before a pull request, and how to
+finish an update by hand.
 
 ## Tests and CI
 
