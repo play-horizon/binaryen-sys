@@ -60,6 +60,12 @@ git tag v<version> <commit>
 git push origin v<version>
 ```
 
+The tag starts `.github/workflows/release.yml`, which checks it, runs CI on it and publishes the
+version on crates.io ([README.md](README.md#how-a-new-binaryen-release-becomes-a-version)). If
+publishing fails, the update workflow's next run starts it again (its **republish** job); to run
+it again on a tag by hand (a rerun publishes nothing twice):
+`gh workflow run release.yml --ref v<version>`.
+
 ## When a check fails
 
 When CI fails on a new Binaryen release (the update workflow's **test** job), the release needs a
@@ -136,3 +142,29 @@ maintainers, with its reason in the pull request.
   that names the crate, with the reason, or another dependency.
 - **The outdated check fails** (`scripts/check-outdated.sh`): raise the requirement in
   `Cargo.toml` to the latest release, run `cargo update`, and check the change like any other.
+
+## Publishing
+
+### When publishing fails
+
+The update workflow's **republish** job fails when a tagged version isn't on crates.io; it has
+then started the release workflow on that tag again. Read that release run (the Actions tab,
+workflow Release, the tag): once one passes, **republish** passes again. Otherwise:
+
+- A cause outside the tagged commit (crates.io down, the trusted publisher's settings): fix it,
+  then run the release again, `gh workflow run release.yml --ref v<version>`, or wait for the next
+  update run.
+- A cause inside the tagged commit, which a commit on `main` can't change on that tag (its CI
+  fails, for instance on an advisory published since, or its tag doesn't name the version its
+  `Cargo.toml` holds): release the fix as the next version
+  ([Versions and releases](#versions-and-releases)), then delete the tag that can't be published,
+  `git push origin --delete v<version>`, so that **republish** stops starting it. That version
+  stays on `main`, untagged and unpublished.
+
+### Setting it up
+
+The first version of the crate is published by hand, as crates.io requires before trusted
+publishing can be set up; every later one is published by the release workflow. A maintainer
+(an owner of the crate on crates.io) keeps, in the crate's settings on crates.io, the trusted
+publisher: the repository `play-horizon/binaryen-sys-next`, the workflow `release.yml` and the
+environment `crates-io`. The repository's environment `crates-io` only lets tags `v*` deploy.

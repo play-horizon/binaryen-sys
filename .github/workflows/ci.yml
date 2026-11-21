@@ -4,7 +4,7 @@
 # the C API exactly (scripts/check-c-api.sh), the formatting, Clippy and the API docs; builds the
 # crate from its package, as crates.io would serve it; and checks the dependencies with cargo-deny
 # (deny.toml). Runs on pushes to main and on pull requests, and is called by the update workflow
-# on the commit it prepared (`ref`).
+# on the commit it prepared and by the release workflow on the tagged one (`ref`).
 name: CI
 
 on:

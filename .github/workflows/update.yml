@@ -5,9 +5,12 @@
 # by scripts/vendor-binaryen.sh, the bindings, the version `<N>.0.0`) and pushes it as a commit to
 # the branch `update-binaryen`, never over a person's commits there; `test` runs CI on that
 # commit, on the three OSes, which fails when the release needs a change of the crate (among its
-# checks, scripts/check-c-api.sh); and `release` fast-forwards main to it, tags it `v<N>.0.0` and
-# deletes the branch. A failure anywhere leaves main as it was. Only the steps that push hold a
-# token that may write to the repository, and their jobs run no third-party code. On every run,
+# checks, scripts/check-c-api.sh); `release` fast-forwards main to it, tags it `v<N>.0.0` and
+# deletes the branch; and `publish` starts the release workflow on the tag, which publishes the
+# version on crates.io. A failure before `release` leaves main, the tags and crates.io as they
+# were, and the next run tries again; on every run, `republish` starts the release workflow again
+# on each tagged version that crates.io lacks. Only the steps that push or start a workflow hold
+# a token that may change the repository, and their jobs run no third-party code. On every run,
 # `keepalive` re-enables the scheduled workflows through the API (its token may only manage
 # Actions), to keep GitHub from pausing their schedules for inactivity (README.md).
 name: Update Binaryen
@@ -187,3 +190,80 @@ jobs:
           git tag "$TAG" "$COMMIT"
           git push --atomic "$remote" "$COMMIT:refs/heads/main" "refs/tags/$TAG"
           git push "$remote" --delete update-binaryen
+
+  # Starts the release workflow on the new tag: a tag pushed with this workflow's token starts
+  # none by itself. Its token may only manage Actions.
+  publish:
+    needs: [push, release]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
+      - env:
+          TAG: v${{ needs.push.outputs.version }}
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run release.yml --repo "$GITHUB_REPOSITORY" --ref "$TAG"
+
+  # Starts the release workflow again on each tagged version of main that crates.io lacks (a
+  # release run that failed after the tag, while crates.io was down for instance), from the
+  # crate's first version on crates.io (the older tags were never meant for it; the first version
+  # is published by hand), so that every tagged version gets published without a person. A run
+  # that starts one fails, so that a person hears of it: a release that keeps failing makes every
+  # run fail until a person fixes it. A tag whose release run is still going is left to it. Its
+  # token may only manage Actions, in the step that uses it.
+  republish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+
+      - id: unpublished
+        run: |
+          versions="$(scripts/crates-io-versions.sh)"
+          if [[ -z "$versions" ]]; then
+            echo "crates.io has no version of the crate yet: the first one is published by hand."
+            exit 0
+          fi
+          first="$(head --lines=1 <<< "$versions")"
+          git tag --merged HEAD --list 'v*' > "$RUNNER_TEMP/tags"
+          unpublished=()
+          while read -r tag; do
+            version="${tag#v}"
+            if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              continue
+            fi
+            oldest="$(printf '%s\n' "$first" "$version" | sort --version-sort | head --lines=1)"
+            if [[ "$oldest" != "$first" ]] || grep --quiet --fixed-strings --line-regexp "$version" <<< "$versions"; then
+              continue
+            fi
+            unpublished+=("$tag")
+          done < "$RUNNER_TEMP/tags"
+          echo "tags=${unpublished[*]}" >> "$GITHUB_OUTPUT"
+
+      - if: steps.unpublished.outputs.tags != ''
+        env:
+          TAGS: ${{ steps.unpublished.outputs.tags }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          started=()
+          for tag in $TAGS; do
+            running="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow release.yml --branch "$tag" \
+              --json status --jq '[.[] | select(.status != "completed")] | length')"
+            if (( running > 0 )); then
+              echo "$tag: a release run is still going."
+              continue
+            fi
+            gh workflow run release.yml --repo "$GITHUB_REPOSITORY" --ref "$tag"
+            started+=("$tag")
+          done
+          if (( ${#started[@]} > 0 )); then
+            echo "::error::tagged but not on crates.io: ${started[*]}; started the release workflow again on them"
+            exit 1
+          fi

@@ -1,22 +1,27 @@
 # binaryen-sys-next
 
+[![crates.io](https://img.shields.io/crates/v/binaryen-sys-next.svg)](https://crates.io/crates/binaryen-sys-next)
+[![docs.rs](https://img.shields.io/docsrs/binaryen-sys-next)](https://docs.rs/binaryen-sys-next)
+[![CI](https://github.com/play-horizon/binaryen-sys-next/actions/workflows/ci.yml/badge.svg)](https://github.com/play-horizon/binaryen-sys-next/actions/workflows/ci.yml)
+
 Raw Rust bindings to the **C API** of [Binaryen](https://github.com/WebAssembly/binaryen),
 the WebAssembly compiler and optimizer library: every type and function `binaryen-c.h` declares,
 but the functions its library doesn't define, on the latest Binaryen release, checked against the
 header and the library on every change ([The C API check](#the-c-api-check)). The crate builds
 Binaryen from source, as a static library, and links it in. A new Binaryen release becomes a
-new version of the crate by itself, tested and tagged, unless it needs a change of the crate
-([How a new Binaryen release becomes a tag](#how-a-new-binaryen-release-becomes-a-tag)).
+new version of the crate by itself, tested and published, unless it needs a change of the crate
+([How a new Binaryen release becomes a version](#how-a-new-binaryen-release-becomes-a-version)).
 
 ## Using it
 
-Depend on a tag of this repository: the latest one (the repository's Tags page) is on the latest
-Binaryen release ([Versions](#versions)).
-
 ```toml
 [dependencies]
-binaryen-sys-next = { git = "https://github.com/play-horizon/binaryen-sys-next.git", tag = "v<N>.<x>.<y>" }
+binaryen-sys-next = "<N>"
 ```
+
+`<N>` is the number of a Binaryen release ([Versions](#versions)): `"133"` is Binaryen's
+`version_133`, with every later fix of the crate on that release. Each version is also a tag of
+this repository (`v<N>.<x>.<y>`), which a git dependency can name instead.
 
 Building needs CMake 3.16.3 or later and a C++20 compiler: GCC or Clang on Linux, the Xcode
 command-line tools on macOS, Visual Studio's C++ tools on Windows. Binaryen's sources come with
@@ -76,21 +81,24 @@ crate takes it with the release that has it.
 ## Versions
 
 The crate's major version is the number of the Binaryen release it is built on: Binaryen's
-`version_133` is the crate's `133.0.0`, tagged `v133.0.0`. A fix of the crate itself, on the same
-Binaryen release, bumps the minor or patch version (`133.0.1`), in its own commit, and is tagged
-the same way.
+`version_133` is the crate's `133.0.0`, tagged `v133.0.0`. Each Binaryen release may change the C
+API, so moving to the next one is a change of the major version in the dependent's `Cargo.toml`.
+A change of the crate itself, on the same Binaryen release, bumps the minor version (the patch
+version for a fix that changes nothing else), in its own commit, and is tagged the same way.
 
-`main` is pushed only by the update workflow or in a commit that bumps the crate's version, and
-every version on `main` is tagged.
+`main` is pushed only by the update workflow or in a commit that bumps the crate's version.
+Every version on `main` is tagged, and from the crate's first version on crates.io (`133.2.0`) on,
+published there; a version whose tagged commit can't be published loses its tag instead
+([CONTRIBUTING.md](CONTRIBUTING.md#when-publishing-fails)).
 
-## How a new Binaryen release becomes a tag
+## How a new Binaryen release becomes a version
 
 `.github/workflows/update.yml` runs every day at 05:23 UTC, and by hand from the Actions tab or
 with `gh workflow run update.yml`:
 
 1. **prepare** runs `scripts/update-binaryen.sh`, which finds the latest `version_<N>` tag of
    `WebAssembly/binaryen`. If the crate is already on it, the job reports that Binaryen is up to
-   date and the run ends there. Otherwise the script vendors the release's sources
+   date and the update ends there. Otherwise the script vendors the release's sources
    (`scripts/vendor-binaryen.sh version_<N>`, which replaces `binaryen/` and `binaryen-release`),
    regenerates `src/bindings.rs`, and sets the version to `<N>.0.0` in `Cargo.toml` and
    `Cargo.lock`; the job hands on the tag and the new `src/bindings.rs`. It can't write to the
@@ -109,14 +117,37 @@ with `gh workflow run update.yml`:
    the C API exactly ([The C API check](#the-c-api-check)).
 4. **release** fast-forwards `main` to the commit and tags it `v<N>.0.0`, in one atomic push,
    then deletes `update-binaryen`.
+5. **publish** starts the release workflow on the tag (a tag pushed with a workflow's own token
+   starts no workflow by itself).
 
-Only **push** and **release** hold a token that may write to the repository, each in the step
-that pushes, with no credential on disk before it; neither runs third-party code.
+On every run, beside the update, **republish** checks that crates.io has every tagged version of
+`main` from the crate's first one there on (below), and **keepalive** keeps the schedules alive
+([Keeping the schedules alive](#keeping-the-schedules-alive)).
 
-If any step fails, `main` and the tags stay as they were, and the next run tries again. A failure
-of **test** means the release needs a change of the crate: a function, type or constant the
-bindings don't cover, a test or a build that breaks, a hand-written part that no longer matches.
-Nothing is tagged until a person makes that change:
+`.github/workflows/release.yml` publishes a tagged version on crates.io: the one the update
+workflow tags, and one a person tags ([CONTRIBUTING.md](CONTRIBUTING.md#versions-and-releases)).
+It checks that the tag names the crate's version on a commit of `main`, runs CI on it (which also
+builds the crate from its package, proving the package holds everything the build needs), then
+uploads the package, in a job that runs no build. Its upload token comes from crates.io's
+[trusted publishing](https://crates.io/docs/trusted-publishing): crates.io gives the run a token
+that expires after 30 minutes, for this workflow of this repository in the environment
+`crates-io` only, and no token is stored anywhere. A version crates.io already has is left as it
+is.
+
+Only **push**, **release**, **publish**, **republish** and **keepalive** hold a token that may
+change the repository (the last three only to manage Actions), each in the step that uses it,
+with no credential on disk before it; none of them runs third-party code.
+
+If a step up to **test** fails, `main`, the tags and crates.io stay as they were, and the next run
+tries again. If publishing fails once a version is tagged (crates.io down, for instance), the next
+run publishes it: **republish** starts the release workflow again on each tag of `main` whose
+version crates.io lacks, from the crate's first version on crates.io on, unless a release run for
+that tag is still going, and fails, so that a person hears of it (a release that keeps failing fails
+every update run until a person fixes it, as
+[CONTRIBUTING.md](CONTRIBUTING.md#when-publishing-fails) says; `gh workflow run release.yml --ref
+v<version>` starts one by hand). A failure of **test** means the release needs a change of the
+crate: a function, type or constant the bindings don't cover, a test or a build that breaks, a
+hand-written part that no longer matches. Nothing is published until a person makes that change:
 [CONTRIBUTING.md](CONTRIBUTING.md#finishing-an-update-by-hand) says how, and how to fix each failure
 of the checks.
 
@@ -166,8 +197,6 @@ schedules this way report, not something GitHub documents. If the schedule is pa
 Actions tab says so, and `gh workflow list --all` shows the state `disabled_inactivity`), a
 disabled workflow can't run its keepalive: re-enable it from the Actions tab, or with
 `gh workflow enable update.yml`, and run it once (`gh workflow run update.yml`) to catch up.
-
-Moving a project that depends on the crate to the new release is a change of tag in that project.
 
 ## Dependencies
 

@@ -1,0 +1,106 @@
+# Publishes a version of the crate on crates.io: on each tag `v<version>` a person pushes, and
+# when run by hand on a tag (`gh workflow run release.yml --ref v<version>`), which is how the
+# update workflow starts it after tagging a new Binaryen release, and again later on each tagged
+# version of main that crates.io lacks, from the crate's first version there on (a tag pushed
+# with a workflow's own token starts no workflow).
+# `verify` checks the tag names the crate's version on a commit of main; `test` runs CI on it,
+# which also builds the crate from its package; `publish` uploads the package, with a token
+# crates.io gives this workflow for the run through trusted publishing (no stored token), in the
+# environment `crates-io`. A version crates.io already has is left as it is, so a rerun publishes
+# nothing twice; the first version of the crate is published by hand (CONTRIBUTING.md,
+# "Publishing").
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      commit: ${{ steps.verify.outputs.commit }}
+      published: ${{ steps.verify.outputs.published }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - id: verify
+        run: |
+          if [[ "$GITHUB_REF_TYPE" != tag ]]; then
+            echo "::error::run this workflow on a tag: gh workflow run release.yml --ref v<version>"
+            exit 1
+          fi
+          metadata="$(cargo metadata --no-deps --format-version 1 --locked)"
+          name="$(jq --raw-output '.packages[0].name' <<< "$metadata")"
+          version="$(jq --raw-output '.packages[0].version' <<< "$metadata")"
+          if [[ "$GITHUB_REF_NAME" != "v$version" ]]; then
+            echo "::error::the tag $GITHUB_REF_NAME doesn't name the crate's version, $version"
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor HEAD origin/main; then
+            echo "::error::$GITHUB_REF_NAME isn't on main"
+            exit 1
+          fi
+
+          versions="$(scripts/crates-io-versions.sh)"
+          if [[ -z "$versions" ]]; then
+            echo "::error::$name isn't on crates.io yet: its first version is published by hand (CONTRIBUTING.md, \"Publishing\")"
+            exit 1
+          fi
+          if grep --quiet --fixed-strings --line-regexp "$version" <<< "$versions"; then
+            echo "::notice::$name $version is already on crates.io"
+            published=true
+          else
+            published=false
+          fi
+          echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "published=$published" >> "$GITHUB_OUTPUT"
+
+  test:
+    needs: verify
+    if: needs.verify.outputs.published == 'false'
+    uses: ./.github/workflows/ci.yml
+    with:
+      ref: ${{ needs.verify.outputs.commit }}
+
+  # Uploads the package without building it again (CI's `package` job did): the job that holds
+  # the token runs no build script.
+  publish:
+    needs: [verify, test]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: crates-io
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.verify.outputs.commit }}
+          persist-credentials: false
+
+      # Trades the run's OpenID Connect token for a crates.io token that expires after 30
+      # minutes, and revokes it when the job ends.
+      - id: auth
+        uses: rust-lang/crates-io-auth-action@3268eb413133e2960fa4ae0e963ca76380c54cd9 # v1.0.6
+
+      - env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+        run: cargo publish --locked --no-verify
