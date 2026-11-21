@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "binaryen-sys-next"
-version = "133.1.1"
+version = "133.2.0"
 dependencies = [
  "cmake",
 ]
