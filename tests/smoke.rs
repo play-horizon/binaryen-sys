@@ -15,7 +15,7 @@
 use std::ffi::{CStr, c_char};
 use std::ptr;
 
-use binaryen_sys::*;
+use binaryen_sys_next::*;
 
 const POINT_FIELD: i32 = 7;
 

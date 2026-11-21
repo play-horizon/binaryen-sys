@@ -28,7 +28,7 @@
 //! # Examples
 //!
 //! ```
-//! use binaryen_sys::{BinaryenModuleCreate, BinaryenModuleDispose, BinaryenModuleValidate};
+//! use binaryen_sys_next::{BinaryenModuleCreate, BinaryenModuleDispose, BinaryenModuleValidate};
 //!
 //! // SAFETY: the module is created, validated and disposed of once, on this thread.
 //! let valid = unsafe {

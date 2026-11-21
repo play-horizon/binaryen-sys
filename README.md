@@ -1,4 +1,4 @@
-# binaryen-sys
+# binaryen-sys-next
 
 Raw Rust bindings to the **C API** of [Binaryen](https://github.com/WebAssembly/binaryen),
 the WebAssembly compiler and optimizer library: every type and function `binaryen-c.h` declares,
@@ -12,7 +12,7 @@ Binaryen release ([Versions](#versions)).
 
 ```toml
 [dependencies]
-binaryen-sys = { git = "https://github.com/play-horizon/binaryen-sys.git", tag = "v<N>.<x>.<y>" }
+binaryen-sys-next = { git = "https://github.com/play-horizon/binaryen-sys-next.git", tag = "v<N>.<x>.<y>" }
 ```
 
 Building needs CMake 3.16.3 or later and a C++20 compiler: GCC or Clang on Linux, the Xcode
